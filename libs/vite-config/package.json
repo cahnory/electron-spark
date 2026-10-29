@@ -1,0 +1,55 @@
+{
+  "name": "@electron-start/vite-config",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": {
+    "name": "François Germain (Cahnory)",
+    "email": "cahnory@gmail.com",
+    "url": "https://github.com/cahnory"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cahnory/physicall.git",
+    "directory": "libs/vite-config"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "require": "./dist/index.cjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "node --test index.test.mjs"
+  },
+  "dependencies": {
+    "@electron-start/vite-plugin-electron-main": "workspace:*",
+    "@electron-start/vite-plugin-electron-preload": "workspace:*",
+    "@electron-start/vite-plugin-electron-renderer": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "tsdown": "^0.23.2",
+    "vite": "^8.3.5"
+  },
+  "peerDependencies": {
+    "electron": "^45.0.0",
+    "vite": "^8.3.5"
+  }
+}

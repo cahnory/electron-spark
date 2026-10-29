@@ -1,0 +1,30 @@
+{
+  "name": "electron-start",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": {
+    "name": "François Germain (Cahnory)",
+    "email": "cahnory@gmail.com",
+    "url": "https://github.com/cahnory"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cahnory/physicall.git"
+  },
+  "workspaces": {
+    "packages": [
+      "libs/*",
+      "apps/*"
+    ]
+  },
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0",
+    "oxlint-tsgolint": "^7.0.2004",
+    "typescript": "^7.1.0-beta"
+  },
+  "packageManager": "pnpm@12.11.2"
+}

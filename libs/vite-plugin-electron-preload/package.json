@@ -1,0 +1,63 @@
+{
+  "name": "@electron-start/vite-plugin-electron-preload",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": {
+    "name": "François Germain (Cahnory)",
+    "email": "cahnory@gmail.com",
+    "url": "https://github.com/cahnory"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cahnory/physicall.git",
+    "directory": "libs/electron-view-loader"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./runtime/exposeToRenderer": "./src/runtime/exposeToRenderer.ts",
+    "./runtime/getExposed": "./src/runtime/getExposed.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "require": "./dist/index.cjs"
+      },
+      "./runtime/exposeToRenderer": {
+        "import": "./dist/runtime/exposeToRenderer.js",
+        "require": "./dist/runtime/exposeToRenderer.cjs"
+      },
+      "./runtime/getExposed": {
+        "import": "./dist/runtime/getExposed.js",
+        "require": "./dist/runtime/getExposed.cjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "node --test index.test.mjs"
+  },
+  "dependencies": {
+    "@electron-start/vite-plugin-build-on-serve": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "tsdown": "^0.23.2",
+    "vite": "^8.3.5"
+  },
+  "peerDependencies": {
+    "electron": "^45.0.0",
+    "vite": "^8.3.5"
+  }
+}

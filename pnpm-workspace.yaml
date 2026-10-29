@@ -1,0 +1,4 @@
+preferWorkspacePackages: true
+packages:
+  - "apps/*"
+  - "libs/*"

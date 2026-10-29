@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": ["scripts/scaffolding/**/*.hbs"],
+  "sortImports": true,
+  "sortPackageJson": {
+    "sortScripts": true,
+    "sortImports": true
+  },
+  "trailingComma": "all"
+}

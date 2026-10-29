@@ -1,0 +1,5 @@
+{
+  "display": "Workspace",
+  "extends": "./tsconfig.node.json",
+  "exclude": ["apps/*/dist/**/*", "apps/*/src/**/*", "libs/*/dist/**/*", "libs/*/src/**/*"]
+}

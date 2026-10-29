@@ -1,0 +1,9 @@
+{
+  "display": "Node",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2025"],
+    "target": "ES2025",
+    "types": ["@types/node"]
+  }
+}

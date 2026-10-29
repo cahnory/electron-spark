@@ -1,0 +1,8 @@
+{
+  "display": "Web",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2025", "DOM", "DOM.Iterable"],
+    "target": "ES2025"
+  }
+}
