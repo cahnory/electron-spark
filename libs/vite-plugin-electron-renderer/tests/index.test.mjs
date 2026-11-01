@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm, realpath, cp, rename } from "n
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import { buildOnServe } from "@electron-start/vite-plugin-build-on-serve";
 import { createBuilder, createServer } from "vite";
@@ -74,11 +74,12 @@ async function fixture(t) {
   };
 }
 async function data(root) {
-  return (
-    await import(
-      `${pathToFileURL(`${root}/generated/renderer.ts`).href}?version=${Date.now()}-${Math.random()}`
-    )
-  ).default;
+  return JSON.parse(
+    execFileSync(process.execPath, [`${root}/dist/main/main.js`], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }),
+  );
 }
 
 async function checkRendererTypes(root) {
@@ -368,7 +369,8 @@ for (const filename of [undefined, "metadata/windows.ts"]) {
     };
     await (await createBuilder({ ...config, plugins: [electronRenderer(options)] })).buildApp();
     const generated = `${root}/electron/main/${relativeFile}`;
-    const renderer = (await import(pathToFileURL(generated).href)).default;
+    const renderer = await data(root);
+    assert.ok((await readFile(generated, "utf8")).includes("VITE_DEV_SERVER_URL"));
     assert.equal(
       renderer.renderers["screens/settings"].path,
       `${root}/dist/client/screens/settings/index.html`,
@@ -773,4 +775,47 @@ void test("discovers view lifecycle changes and recovers missing preloads with a
   } finally {
     await server.close();
   }
+});
+
+void test("manifest stays identical across build, serve, ports and hashed asset changes", async (t) => {
+  const { root, options, config } = await fixture(t);
+  await mkdir(`${root}/public`);
+  await writeFile(`${root}/public/favicon.ico`, "first icon");
+  const build = async () =>
+    (await createBuilder({ ...config, plugins: [electronRenderer(options)] })).buildApp();
+  await build();
+  const manifest = () => readFile(`${root}/generated/renderer.ts`, "utf8");
+  const original = await manifest();
+  const serve = async (port) => {
+    const server = await createServer({
+      ...config,
+      server: { ws: false },
+      plugins: [electronRenderer(options), buildOnServe("preload"), buildOnServe("electron")],
+    });
+    try {
+      server.resolvedUrls = { local: [`http://localhost:${port}/app/`], network: [] };
+      await Promise.all(Object.values(server.environments).map((env) => env.listen(server)));
+      server.httpServer.address = () => ({ port, address: "127.0.0.1", family: "IPv4" });
+      server.httpServer.emit("listening");
+      await until(async () => (await data(root)).mode === "serve");
+      assert.equal(await manifest(), original);
+      const previous = (await data(root)).renderers["screens/settings"].window.webPreferences
+        .preload;
+      await writeFile(`${root}/screens/settings/bridge.js`, `console.log(${port})`);
+      await until(
+        async () =>
+          (await data(root)).renderers["screens/settings"].window.webPreferences.preload !==
+          previous,
+      );
+      assert.equal(await manifest(), original);
+    } finally {
+      await server.close();
+    }
+  };
+  await serve(4321);
+  await serve(4322);
+  await writeFile(`${root}/public/favicon.ico`, "changed icon");
+  await build();
+  assert.equal(await manifest(), original);
+  assert.equal((await data(root)).mode, "build");
 });

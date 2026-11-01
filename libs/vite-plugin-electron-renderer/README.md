@@ -26,6 +26,14 @@ plus a `window` object suitable for `new BrowserWindow(entry.window)`:
 The generated module defaults to `renderers.generated.ts` beside the main entry.
 `rendererManifestPath` can override this path, relative to the main entry directory.
 
+The generated source stays identical across build and serve, server port changes,
+and changes to emitted preload or icon hashes. It changes when renderer inputs
+or window metadata change. The plugin substitutes `VITE_DEV_SERVER_URL` in the
+Electron bundle (the resolved server URL in development, `undefined` in production)
+and resolves emitted filesystem paths while bundling. A hashed preload rebuild
+invalidates the watched main build by updating the manifest timestamp without
+changing its contents. Import this module through the configured Electron build.
+
 The exported type supports both modes regardless of when the file was generated.
 Check `renderer.mode === "serve"` to access each renderer's `url`; the `else`
 branch exposes its `path`. Renderer keys and window options retain their inferred types.

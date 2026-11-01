@@ -180,6 +180,7 @@ const makeConfig = (options: ElectronConfigOptions, context: ConfigEnv): UserCon
           consumer: "server",
           input: mainEntry,
           build: {
+            copyPublicDir: false,
             emptyOutDir: true,
             outDir: path.relative(srcDir, path.resolve(outDir, "main")),
             ssr: true,

@@ -2,22 +2,25 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+declare const VITE_DEV_SERVER_URL: string | undefined;
+
 const dirname = typeof __dirname === "string" ? __dirname : fileURLToPath(new URL(".", import.meta.url));
 const rendererData = {
-  "mode": "serve" as const,
+  "mode": (VITE_DEV_SERVER_URL ? "serve" : "build"),
   "renderers": {
     "view": {
-      "url": "http://localhost:5173/view/index.html",
+      ...(VITE_DEV_SERVER_URL ? { url: new URL("view/index.html", VITE_DEV_SERVER_URL).href } : { path: resolve(dirname, "../../dist/view/index.html") }),
       "window": {
         "title": "Electron + Vite + React",
         "webPreferences": {
-          "preload": resolve(dirname, "../../dist/preload/view/preload.cjs")
+          "preload": resolve(dirname, "../view/preload.ts")
         },
         "icon": resolve(dirname, "../public/favicon.ico")
       }
     }
   }
 };
+
 
 type Renderers = typeof rendererData.renderers;
 type RendererData<Mode extends "serve" | "build"> = {
