@@ -1,6 +1,6 @@
 import type { StorageAdapter } from "../store.ts";
 
-export const createMemoryAdaptor = <T>(init: T): StorageAdapter<T> => {
+export const createMemoryAdaptor = <T>(init: T): StorageAdapter<T, T> => {
   let value: T = init;
 
   return {

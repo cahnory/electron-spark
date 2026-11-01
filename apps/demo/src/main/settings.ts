@@ -20,7 +20,6 @@ export const createSettings = () => {
     channel: "settings",
     storage: createVersionedStorage({
       version: 1,
-      validator: settingsSchema,
       storage: file,
     }),
     schema: settingsSchema,

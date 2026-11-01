@@ -1,5 +1,4 @@
 import type { StorageAdapter } from "./store.ts";
-import { type Validator, validate } from "./validator.ts";
 
 export type StorageVersion = number | string;
 
@@ -15,7 +14,6 @@ export type VersionedStorageOptions<T, Version extends StorageVersion = StorageV
   };
   version: Version;
   migrate?: (stored: VersionedData<unknown>) => T | Promise<T>;
-  validator?: Validator<unknown, T>;
 };
 
 export class UnsupportedVersionError extends Error {
@@ -35,12 +33,11 @@ export class UnsupportedVersionError extends Error {
 const isVersion = (value: unknown): value is StorageVersion =>
   typeof value === "string" || (typeof value === "number" && Number.isFinite(value));
 
-/** Migrates and optionally validates on read without persisting. */
+/** Checks envelopes and migrates on read without validating payloads or persisting. */
 export const createVersionedStorage = <T, Version extends StorageVersion = StorageVersion>({
   storage,
   version,
   migrate,
-  validator,
 }: VersionedStorageOptions<T, Version>): StorageAdapter<T> => {
   if (!isVersion(version)) {
     throw new TypeError("Storage version must be a string or a finite number");
@@ -73,7 +70,7 @@ export const createVersionedStorage = <T, Version extends StorageVersion = Stora
         data = await migrate({ version: stored.version, data: stored.data });
       }
 
-      return validator ? validate(validator, data) : (data as T);
+      return data;
     },
     write: (data) => storage.write({ version, data }),
   };

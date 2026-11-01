@@ -22,7 +22,7 @@ export const createFileSystemAdaptor = <T>(filePath: string, init: T): StorageAd
         throw error;
       }
 
-      return JSON.parse(contents) as T;
+      return JSON.parse(contents);
     },
     write: async (value: T) => {
       const contents = JSON.stringify(value);

@@ -28,8 +28,10 @@ import {
   createVersionedStorage,
   UnsupportedVersionError,
 } from "@electron-start/store";
+import { z } from "zod";
 
-type Settings = { enabled: boolean };
+const settingsSchema = z.object({ enabled: z.boolean() });
+type Settings = z.infer<typeof settingsSchema>;
 const version = 2;
 const initialValue: Settings = { enabled: false };
 
@@ -54,7 +56,8 @@ const storage = createVersionedStorage({
   },
 });
 
-const store = createStore({ storage });
+// Validate the unknown payload with a Standard Schema validator.
+const store = createStore({ storage, validator: settingsSchema });
 const settings = await store.get();
 await store.update((current) => ({ enabled: !current.enabled }));
 ```
@@ -74,16 +77,20 @@ Reads do not write migrated results back. The next successful `set` or `update`
 writes `{ version: currentVersion, data }`. Migrations should avoid mutating their
 input, especially with the memory adapter, which stores object references.
 
-Envelope checks validate the version and presence of `data`. Pass an optional
-Standard Schema `validator` to `createVersionedStorage` to validate the current
-payload on every read, including migration results. Sync and async validators
-are supported, and the validator's output is returned. Invalid payloads throw
-`ValidationError` without writing to storage. Without a validator, payloads are
-trusted as `T`.
+Envelope checks validate the version and presence of `data`. Versioned storage
+returns payloads as `unknown`, including migration results, without validating
+their shape. Filesystem reads also return `unknown`; memory reads retain their
+known type.
 
-The wrapper's validator should describe the persisted data shape. A store's
-optional `validator` applies to `set` and `update`, not reads, and may describe a
-different input type. The wrapper does not validate writes separately.
+The store's optional Standard Schema `validator` validates writes and reads,
+including reads before an `update` callback. Invalid values throw `ValidationError`
+without writing to storage. Sync and async validators are supported, and their
+output is used. The same schema describes the persisted data for both reads and
+writes (`Validator<T, T>`). Transformations must preserve that type and produce
+values accepted by the same schema. Convert other input shapes before calling
+`set` or returning from an `update` callback.
+Without validation, a store preserves the adapter's read type, so untrusted reads
+remain `unknown`.
 
 Run the adapter and versioning tests with Node.js 24 or later:
 

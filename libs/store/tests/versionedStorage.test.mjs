@@ -6,6 +6,7 @@ import { test } from "node:test";
 
 import { createFileSystemAdaptor } from "../src/adaptors/fileSystem.ts";
 import { createMemoryAdaptor } from "../src/adaptors/memory.ts";
+import { createStore } from "../src/store.ts";
 import { ValidationError } from "../src/validator.ts";
 import { createVersionedStorage, UnsupportedVersionError } from "../src/versionedStorage.ts";
 
@@ -29,9 +30,9 @@ void test("validates current and migrated payloads and returns the validator res
         storage: adapter,
         version: 2,
         migrate: (stored) => stored.data,
-        validator: countValidator,
       });
-      assert.deepEqual(await storage.read(), { count: 3 });
+      const store = createStore({ storage, validator: countValidator });
+      assert.deepEqual(await store.get(), { count: 3 });
       assert.equal(adapter.read(), original);
     }),
   );
@@ -46,9 +47,9 @@ void test("rejects invalid current and migrated payloads without overwriting sto
         storage: adapter,
         version: 2,
         migrate: (stored) => stored.data,
-        validator: countValidator,
       });
-      await assert.rejects(storage.read(), (error) => {
+      const store = createStore({ storage, validator: countValidator });
+      await assert.rejects(store.get(), (error) => {
         assert.ok(error instanceof ValidationError);
         assert.deepEqual(error.issues, [{ message: "Expected a numeric count" }]);
         return true;
@@ -174,4 +175,34 @@ void test("supports missing files with a current-version initial envelope", asyn
   await assert.rejects(readFile(file), { code: "ENOENT" });
   await storage.write({ count: 1 });
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { version: 2, data: { count: 1 } });
+});
+
+void test("store rejects invalid reads before update callbacks or writes", async () => {
+  const adapter = createMemoryAdaptor({ count: "invalid" });
+  const store = createStore({ storage: adapter, validator: countValidator });
+  await assert.rejects(
+    store.update(() => assert.fail("Invalid data must not reach update")),
+    ValidationError,
+  );
+  assert.deepEqual(adapter.read(), { count: "invalid" });
+  await store.set({ count: 4 });
+  await store.update((current) => ({ count: current.count + 1 }));
+  assert.deepEqual(await store.get(), { count: 5 });
+});
+
+void test("store uses the same schema for reads and writes", async () => {
+  const adapter = createMemoryAdaptor({ count: 2, extra: true });
+  const store = createStore({ storage: adapter, validator: countValidator });
+  assert.deepEqual(await store.get(), { count: 2 });
+  await store.set({ count: 3, extra: true });
+  assert.deepEqual(adapter.read(), { count: 3 });
+  await assert.rejects(store.set({ count: "invalid" }), ValidationError);
+  await assert.rejects(
+    store.update(() => ({ count: "invalid" })),
+    ValidationError,
+  );
+  assert.deepEqual(adapter.read(), { count: 3 });
+  await store.update((current) => ({ count: current.count + 1, extra: true }));
+  assert.deepEqual(adapter.read(), { count: 4 });
+  assert.deepEqual(await store.get(), { count: 4 });
 });

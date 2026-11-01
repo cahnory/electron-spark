@@ -1,8 +1,8 @@
 import { type MutationQueue, createMutationQueue } from "./mutationQueue.ts";
 import { type Validator, validate } from "./validator.ts";
 
-export type StorageAdapter<T> = {
-  read: () => T | Promise<T>;
+export type StorageAdapter<T, Read = unknown> = {
+  read: () => Read | Promise<Read>;
   write: (value: T) => void | Promise<void>;
 };
 
@@ -13,16 +13,16 @@ export type Store<Input, Output = Input> = {
 };
 
 type CreateStore = {
-  <const Input, const Output>(opts: {
-    queue?: MutationQueue;
-    storage: StorageAdapter<Output>;
-    validator: Validator<Input, Output>;
-  }): Store<Input, Output>;
   <const Type>(opts: {
     queue?: MutationQueue;
     storage: StorageAdapter<Type>;
+    validator: Validator<Type, Type>;
+  }): Store<Type>;
+  <const Type, const Read>(opts: {
+    queue?: MutationQueue;
+    storage: StorageAdapter<Type, Read>;
     validator?: undefined;
-  }): Store<Type, Type>;
+  }): Store<Type, Read>;
 };
 
 export const createStore: CreateStore = ({
@@ -35,14 +35,14 @@ export const createStore: CreateStore = ({
   validator?: Validator<unknown, unknown> | undefined;
 }) =>
   ({
-    get: () => queue.enqueue(() => Promise.resolve(storage.read())),
+    get: () => queue.enqueue(async () => validate(validator, await storage.read())),
     set: (value) =>
       queue.enqueue(async () => {
         await storage.write(await validate(validator, value));
       }),
     update: (transform) =>
       queue.enqueue(async () => {
-        const current = await storage.read();
+        const current = await validate(validator, await storage.read());
         const next = await validate(validator, await transform(current));
 
         await storage.write(next);
