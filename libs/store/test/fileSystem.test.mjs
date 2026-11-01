@@ -12,7 +12,7 @@ const fixture = async (t) => {
   return directory;
 };
 
-test("returns initial value for a missing file and persists replacements across instances", async (t) => {
+void test("returns initial value for a missing file and persists replacements across instances", async (t) => {
   const directory = await fixture(t);
   const file = join(directory, "nested", "state.json");
   const adapter = createFileSystemAdaptor(file, { count: 0 });
@@ -24,7 +24,7 @@ test("returns initial value for a missing file and persists replacements across 
   assert.deepEqual(await readdir(join(directory, "nested")), ["state.json"]);
 });
 
-test("propagates malformed JSON and filesystem read errors", async (t) => {
+void test("propagates malformed JSON and filesystem read errors", async (t) => {
   const directory = await fixture(t);
   const file = join(directory, "state.json");
   await writeFile(file, "invalid JSON");
@@ -32,7 +32,7 @@ test("propagates malformed JSON and filesystem read errors", async (t) => {
   await assert.rejects(createFileSystemAdaptor(directory, {}).read());
 });
 
-test("serialization failures preserve the existing value", async (t) => {
+void test("serialization failures preserve the existing value", async (t) => {
   const directory = await fixture(t);
   const file = join(directory, "state.json");
   const adapter = createFileSystemAdaptor(file, null);
@@ -45,7 +45,7 @@ test("serialization failures preserve the existing value", async (t) => {
   assert.deepEqual(await readdir(directory), ["state.json"]);
 });
 
-test("cleans up temporary files when replacement fails", async (t) => {
+void test("cleans up temporary files when replacement fails", async (t) => {
   const directory = await fixture(t);
   const target = join(directory, "target");
   await mkdir(target);

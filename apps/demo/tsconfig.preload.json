@@ -1,0 +1,5 @@
+{
+  "display": "Preload",
+  "extends": "../../tsconfig.web.json",
+  "include": ["src/view/preload.ts"]
+}

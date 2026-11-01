@@ -1,0 +1,8 @@
+{
+  "display": "Electron",
+  "extends": "../../tsconfig.node.json",
+  "include": ["src/main/**/*"],
+  "compilerOptions": {
+    "rootDir": "./src/main"
+  }
+}

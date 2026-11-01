@@ -69,7 +69,7 @@ function config(root) {
 
 for (const composed of [false, true]) {
   for (const isolated of [false, true]) {
-    test(`bridges all value exports, without renderer execution (isolated=${isolated}, composed=${composed})`, async () => {
+    void test(`bridges all value exports, without renderer execution (isolated=${isolated}, composed=${composed})`, async () => {
       await fixture(async (root) => {
         const options = config(root);
         if (!composed) options.plugins = [electronPreloadExpose(), electronPreloadRenderer()];
@@ -118,7 +118,7 @@ for (const composed of [false, true]) {
   }
 }
 
-test("dev imports use the getter and watch re-exported files", async () => {
+void test("dev imports use the getter and watch re-exported files", async () => {
   await fixture(async (root) => {
     const server = await createServer({
       ...config(root),
@@ -140,7 +140,7 @@ test("dev imports use the getter and watch re-exported files", async () => {
   });
 });
 
-test("each preload environment exposes its own entry under a distinct key", async () => {
+void test("each preload environment exposes its own entry under a distinct key", async () => {
   await fixture(async (root) => {
     await writeFile(path.join(root, "second.ts"), "export const second = 'second';");
     await writeFile(

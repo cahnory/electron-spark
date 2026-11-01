@@ -20,7 +20,7 @@ const countValidator = {
   },
 };
 
-test("validates current and migrated payloads and returns the validator result", async () => {
+void test("validates current and migrated payloads and returns the validator result", async () => {
   for (const version of [1, 2]) {
     const original = { version, data: { count: 3, extra: true } };
     const adapter = createMemoryAdaptor(original);
@@ -35,7 +35,7 @@ test("validates current and migrated payloads and returns the validator result",
   }
 });
 
-test("rejects invalid current and migrated payloads without overwriting storage", async () => {
+void test("rejects invalid current and migrated payloads without overwriting storage", async () => {
   for (const version of [1, 2]) {
     const original = { version, data: { count: "invalid" } };
     const adapter = createMemoryAdaptor(original);
@@ -54,7 +54,7 @@ test("rejects invalid current and migrated payloads without overwriting storage"
   }
 });
 
-test("reads current data without migrating and wraps writes", async () => {
+void test("reads current data without migrating and wraps writes", async () => {
   const adapter = createMemoryAdaptor({ version: "v2", data: { count: 1 } });
   const storage = createVersionedStorage({
     storage: adapter,
@@ -66,7 +66,7 @@ test("reads current data without migrating and wraps writes", async () => {
   assert.deepEqual(adapter.read(), { version: "v2", data: { count: 2 } });
 });
 
-test("migrates unknown data asynchronously without persisting until a write", async () => {
+void test("migrates unknown data asynchronously without persisting until a write", async () => {
   const original = { version: 1, data: { oldCount: 3 } };
   const adapter = createMemoryAdaptor(original);
   const storage = createVersionedStorage({
@@ -83,7 +83,7 @@ test("migrates unknown data asynchronously without persisting until a write", as
   assert.deepEqual(adapter.read(), { version: 2, data: { count: 4 } });
 });
 
-test("compares versions by strict equality and rejects unsupported versions", async () => {
+void test("compares versions by strict equality and rejects unsupported versions", async () => {
   const storage = createVersionedStorage({
     storage: createMemoryAdaptor({ version: "2", data: 1 }),
     version: 2,
@@ -96,7 +96,7 @@ test("compares versions by strict equality and rejects unsupported versions", as
   });
 });
 
-test("rejects malformed envelopes without attempting migration", async () => {
+void test("rejects malformed envelopes without attempting migration", async () => {
   for (const value of [
     null,
     [],
@@ -123,7 +123,7 @@ test("rejects malformed envelopes without attempting migration", async () => {
   }
 });
 
-test("propagates migration and adapter errors without resetting data", async () => {
+void test("propagates migration and adapter errors without resetting data", async () => {
   const original = { version: 1, data: "old" };
   const adapter = createMemoryAdaptor(original);
   const error = new Error("Migration failed");
@@ -154,7 +154,7 @@ test("propagates migration and adapter errors without resetting data", async () 
   await assert.rejects(storage.write("new"), (caught) => caught === error);
 });
 
-test("supports missing files with a current-version initial envelope", async (t) => {
+void test("supports missing files with a current-version initial envelope", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "versioned-storage-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const file = join(directory, "state.json");

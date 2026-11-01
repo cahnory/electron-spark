@@ -1,0 +1,8 @@
+{
+  "display": "View",
+  "extends": "../../tsconfig.web.json",
+  "include": ["src/view/**/*", "src/views/**/*"],
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  }
+}

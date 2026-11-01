@@ -131,7 +131,7 @@ async function until(fn) {
   throw new Error("Timed out waiting for generated renderer metadata", { cause: lastError });
 }
 
-test("build collects emitted filenames before compiling main and discovers arbitrary renderer paths and optional preloads", async (t) => {
+void test("build collects emitted filenames before compiling main and discovers arbitrary renderer paths and optional preloads", async (t) => {
   const { root, options, config } = await fixture(t);
   await (await createBuilder({ ...config, plugins: [electronRenderer(options)] })).buildApp();
   const result = await data(root);
@@ -152,7 +152,7 @@ test("build collects emitted filenames before compiling main and discovers arbit
 });
 
 for (const fromFile of [false, true])
-  test(`serve preserves metadata across watched builds (${fromFile ? "config file" : "inline"})`, async (t) => {
+  void test(`serve preserves metadata across watched builds (${fromFile ? "config file" : "inline"})`, async (t) => {
     const { root, options, config } = await fixture(t);
     const plugins = [electronRenderer(options), buildOnServe("preload"), buildOnServe("electron")];
     if (fromFile) {
@@ -222,7 +222,36 @@ for (const fromFile of [false, true])
     );
   });
 
-test("discovers renamed client/server environments and object inputs", async (t) => {
+void test("skips an implicit SSR environment added by a plugin", async (t) => {
+  const { root, options, config } = await fixture(t);
+  const builder = await createBuilder({
+    ...config,
+    plugins: [
+      electronRenderer(options),
+      { name: "ssr-dependencies", config: () => ({ ssr: { external: ["example"] } }) },
+    ],
+  });
+  assert.ok(builder.environments.ssr);
+  await builder.buildApp();
+  assert.match(await readFile(`${root}/dist/main/main.js`, "utf8"), /screens\/settings/);
+});
+
+void test("builds an explicit SSR entry", async (t) => {
+  const { root, options, config } = await fixture(t);
+  await writeFile(`${root}/worker.js`, 'console.log("explicit SSR entry")');
+  config.environments.ssr = {
+    input: "worker.js",
+    build: {
+      ssr: true,
+      outDir: "dist/ssr",
+      rolldownOptions: { output: { entryFileNames: "worker.js" } },
+    },
+  };
+  await (await createBuilder({ ...config, plugins: [electronRenderer(options)] })).buildApp();
+  assert.match(await readFile(`${root}/dist/ssr/worker.js`, "utf8"), /explicit SSR entry/);
+});
+
+void test("discovers renamed client/server environments and object inputs", async (t) => {
   const { root, options, config } = await fixture(t);
   config.environments.windows = {
     ...config.environments.client,
@@ -255,7 +284,7 @@ test("discovers renamed client/server environments and object inputs", async (t)
   assert.equal(result.renderers["panels/help"].path, `${root}/dist/client/panels/help/page.html`);
 });
 
-test("discovers the default root HTML entry without a preload", async (t) => {
+void test("discovers the default root HTML entry without a preload", async (t) => {
   const { root, options, config } = await fixture(t);
   await writeFile(`${root}/index.html`, "<html>Root</html>");
   delete config.environments.client.input;
@@ -266,7 +295,7 @@ test("discovers the default root HTML entry without a preload", async (t) => {
   });
 });
 
-test("rejects multiple environments for the declared preload", async (t) => {
+void test("rejects multiple environments for the declared preload", async (t) => {
   const { options, config } = await fixture(t);
   config.environments.otherBridge = {
     ...config.environments.preload,
@@ -279,7 +308,7 @@ test("rejects multiple environments for the declared preload", async (t) => {
 });
 
 for (const format of ["es", "cjs"]) {
-  test(`runtime paths survive relocation and nested Electron output (${format})`, async (t) => {
+  void test(`runtime paths survive relocation and nested Electron output (${format})`, async (t) => {
     const { root, options, config } = await fixture(t);
     config.environments.electron.build.minify = true;
     const filename = format === "es" ? "nested/main.mjs" : "nested/main.cjs";
@@ -316,7 +345,7 @@ for (const format of ["es", "cjs"]) {
 }
 
 for (const filename of [undefined, "metadata/windows.ts"]) {
-  test(`generates relative to a nested Electron entry (${filename ?? "default"})`, async (t) => {
+  void test(`generates relative to a nested Electron entry (${filename ?? "default"})`, async (t) => {
     const { root, config } = await fixture(t);
     await mkdir(`${root}/electron/main`, { recursive: true });
     const relativeFile = filename ?? "renderers.generated.ts";
@@ -344,7 +373,7 @@ for (const filename of [undefined, "metadata/windows.ts"]) {
   });
 }
 
-test("rejects missing or ambiguous Electron inputs", async (t) => {
+void test("rejects missing or ambiguous Electron inputs", async (t) => {
   const { config } = await fixture(t);
   for (const input of [[], ["main.js", "other.js"]]) {
     config.environments.electron.input = input;
@@ -358,7 +387,7 @@ test("rejects missing or ambiguous Electron inputs", async (t) => {
   }
 });
 
-test("reads HTML metadata and merges configurable window options with the emitted preload", async (t) => {
+void test("reads HTML metadata and merges configurable window options with the emitted preload", async (t) => {
   const { root, options, config } = await fixture(t);
   options.windowConfigPath = "display.json";
   await writeFile(
@@ -410,7 +439,7 @@ test("reads HTML metadata and merges configurable window options with the emitte
   );
 });
 
-test("resolves public HTML icons and window icon overrides", async (t) => {
+void test("resolves public HTML icons and window icon overrides", async (t) => {
   const { root, options, config } = await fixture(t);
   config.publicDir = "static";
   await mkdir(`${root}/static`);
@@ -439,7 +468,7 @@ test("resolves public HTML icons and window icon overrides", async (t) => {
   );
 });
 
-test("rejects malformed window options", async (t) => {
+void test("rejects malformed window options", async (t) => {
   const { root, options, config } = await fixture(t);
   await writeFile(`${root}/screens/settings/window.json`, '{"webPreferences": false}');
   await assert.rejects(async () => {
@@ -447,7 +476,7 @@ test("rejects malformed window options", async (t) => {
   }, /webPreferences must be a JSON object/);
 });
 
-test("shares a preload outside renderer directories using a nested custom JSON filename", async (t) => {
+void test("shares a preload outside renderer directories using a nested custom JSON filename", async (t) => {
   const { root, options, config } = await fixture(t);
   options.windowConfigPath = "config/display.json";
   await mkdir(`${root}/shared`);
@@ -470,14 +499,14 @@ test("shares a preload outside renderer directories using a nested custom JSON f
   assert.match(await readFile(settings.preload, "utf8"), /shared/);
 });
 
-test("ignores colocated server entries when no preload is declared", async (t) => {
+void test("ignores colocated server entries when no preload is declared", async (t) => {
   const { root, options, config } = await fixture(t);
   await rm(`${root}/screens/settings/window.json`);
   await (await createBuilder({ ...config, plugins: [electronRenderer(options)] })).buildApp();
   assert.equal((await data(root)).renderers["screens/settings"].window.webPreferences, undefined);
 });
 
-test("validates declared preload sources and requires a matching environment", async (t) => {
+void test("validates declared preload sources and requires a matching environment", async (t) => {
   const { root, options, config } = await fixture(t);
   const { readRendererWindow } = await import("./src/index.ts");
   const file = `${root}/screens/settings/window.json`;
@@ -504,7 +533,7 @@ test("validates declared preload sources and requires a matching environment", a
 });
 
 for (const change of ["add", "change", "remove"]) {
-  test(`restarts Vite when a preload declaration changes (${change})`, async (t) => {
+  void test(`restarts Vite when a preload declaration changes (${change})`, async (t) => {
     const { root, options, config } = await fixture(t);
     const file = `${root}/screens/settings/window.json`;
     if (change === "add") await rm(file);
@@ -545,7 +574,7 @@ for (const change of ["add", "change", "remove"]) {
   });
 }
 
-test("reloads file-based environments after changing, removing and adding a preload", async (t) => {
+void test("reloads file-based environments after changing, removing and adding a preload", async (t) => {
   const { root, options, config } = await fixture(t);
   await writeFile(`${root}/screens/settings/other.js`, 'console.log("replacement")');
   const configFile = `${root}/vite.config.mjs`;

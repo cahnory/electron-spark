@@ -542,6 +542,15 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
 
       for (const [name, environment] of Object.entries(builder.environments)) {
         if (name !== client && !preloads.includes(name)) {
+          // Plugins may enable Vite's default SSR environment just to configure
+          // dependency handling. It has no entry and is not an application build.
+          if (
+            name === "ssr" &&
+            !environment.config.input &&
+            !environment.config.build.rolldownOptions.input &&
+            typeof environment.config.build.ssr !== "string"
+          )
+            continue;
           // eslint-disable-next-line no-await-in-loop
           await builder.build(environment);
         }
