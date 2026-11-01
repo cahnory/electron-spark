@@ -7,8 +7,10 @@ import vm from "node:vm";
 
 import { createBuilder, createServer } from "vite";
 
+import { EXPOSED_PRELOADS_KEY } from "../src/runtime/common.ts";
+
 const { electronPreload, electronPreloadExpose, electronPreloadRenderer } = await import(
-  process.env.PRELOAD_PLUGIN_ENTRY ?? "./src/index.ts"
+  process.env.PRELOAD_PLUGIN_ENTRY ?? "../src/index.ts"
 );
 
 async function fixture(run) {
@@ -166,7 +168,7 @@ void test("each preload environment exposes its own entry under a distinct key",
       view,
     );
     assert.equal(view.result, "second");
-    assert.equal(view.__APP_BRIDGE_EXPOSED_PRELOADS__["second.ts"], true);
-    assert.equal(view.__APP_BRIDGE_EXPOSED_PRELOADS__["preload.ts"], undefined);
+    assert.equal(view[EXPOSED_PRELOADS_KEY]["second.ts"], true);
+    assert.equal(view[EXPOSED_PRELOADS_KEY]["preload.ts"], undefined);
   });
 });

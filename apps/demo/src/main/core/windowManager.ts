@@ -23,7 +23,7 @@ type RendererOptions = NavigationOptions &
   );
 
 export const createRenderer = <const K extends string>(options: RendererSettings<K>) => {
-  const create = <const N extends K>(name: N, navigation: NavigationOptions = {}) =>
+  const create = (name: K, navigation: NavigationOptions = {}) =>
     createWindowManager(
       options.mode === "build"
         ? {
@@ -43,7 +43,7 @@ export const createRenderer = <const K extends string>(options: RendererSettings
   return { create };
 };
 
-export const createWindowManager = (options: RendererOptions) => {
+const createWindowManager = (options: RendererOptions) => {
   const rendererUrl = options.mode === "serve" ? new URL(options.url) : pathToFileURL(options.path);
   let win: BrowserWindow | undefined;
 

@@ -42,7 +42,7 @@ mock.module("electron", {
   },
 });
 
-const { createRenderer } = await import("./src/main/core/windowManager.ts");
+const { createRenderer } = await import("../src/main/core/windowManager.ts");
 
 for (const mode of ["serve", "build"]) {
   for (const externalLinks of [undefined, "open", "block"]) {

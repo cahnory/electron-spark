@@ -1,4 +1,4 @@
-import type { StorageAdapter } from "./store";
+import type { StorageAdapter } from "./store.ts";
 import { type Validator, validate } from "./validator.ts";
 
 export type StorageVersion = number | string;

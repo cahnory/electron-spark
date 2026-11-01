@@ -5,7 +5,7 @@ import { createFileSystemAdaptor, createVersionedStorage } from "@electron-start
 import { app } from "electron";
 import { z } from "zod";
 
-import { createStoredState } from "../core/ipc/storedState.ts";
+import { createStoredState } from "./core/storedState.ts";
 
 const localeSchema = z.enum(["fr", "en"]);
 const settingsSchema = z.object({ locale: localeSchema });

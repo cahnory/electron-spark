@@ -46,13 +46,19 @@
   },
   "scripts": {
     "build": "tsdown",
-    "test": "node --test test/*.test.mjs",
-    "typecheck": "tsc -p tsconfig.test.json --noEmit"
+    "check": "concurrently --names format,lint,test,types --group \"pnpm check:format\" \"pnpm check:lint\" \"pnpm check:test\" \"pnpm check:types\"",
+    "check:format": "oxfmt --check .",
+    "check:lint": "oxlint --deny-warnings .",
+    "check:test": "node --test --test-reporter=../../scripts/test-reporter.mjs tests/*.test.mjs",
+    "check:types": "tsc --noEmit -p tsconfig.test.json",
+    "test": "pnpm check:test",
+    "typecheck": "pnpm check:types"
   },
   "dependencies": {
     "@standard-schema/spec": "^1.1.0"
   },
   "devDependencies": {
+    "@electron-start/store": "workspace:*",
     "tsdown": "^0.23.2"
   }
 }

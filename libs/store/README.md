@@ -88,5 +88,5 @@ different input type. The wrapper does not validate writes separately.
 Run the adapter and versioning tests with Node.js 24 or later:
 
 ```sh
-node --test libs/store/test/*.test.mjs
+node --test libs/store/tests/*.test.mjs
 ```

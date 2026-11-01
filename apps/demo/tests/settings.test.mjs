@@ -5,12 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mock, test } from "node:test";
 
-const { createFileSystemAdaptor } = await import("../../libs/store/src/adaptors/fileSystem.ts");
-const { createVersionedStorage } = await import("../../libs/store/src/versionedStorage.ts");
-mock.module("@electron-start/store", {
-  namedExports: { createFileSystemAdaptor, createVersionedStorage },
-});
-
 const handlers = new Map();
 let userData;
 const app = Object.assign(new EventEmitter(), { getPath: () => userData });
@@ -23,7 +17,7 @@ mock.module("electron", {
     },
   },
 });
-const { createSettings } = await import("./src/main/settings/index.ts");
+const { createSettings } = await import("../src/main/settings.ts");
 
 void test("settings IPC validates locale, persists changes, restricts callers, and reloads", async (context) => {
   userData = await mkdtemp(join(tmpdir(), "demo-settings-"));
@@ -89,16 +83,17 @@ void test("settings rejects unsupported versions, invalid data, and unversioned 
   userData = await mkdtemp(join(tmpdir(), "demo-settings-version-"));
   context.after(() => rm(userData, { recursive: true, force: true }));
   const file = join(userData, "settings.json");
-  for (const stored of [
+  await [
     { version: 2, data: { locale: "en" } },
     { version: 1, data: { locale: "de" } },
     { locale: "en" },
-  ]) {
+  ].reduce(async (previous, stored) => {
+    await previous;
     const contents = JSON.stringify(stored);
     await writeFile(file, contents);
     await assert.rejects(createSettings());
     assert.equal(await readFile(file, "utf8"), contents);
     assert.equal(handlers.size, 0);
     assert.equal(app.listenerCount("will-quit"), 0);
-  }
+  }, Promise.resolve());
 });

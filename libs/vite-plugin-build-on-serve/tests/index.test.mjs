@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import { createServer as createViteServer, createLogger, DevEnvironment } from "vite";
 
-import { buildOnServe } from "./src/index.ts";
+import { buildOnServe } from "../src/index.ts";
 
 // Exercise the standalone HTTP lifecycle without opening a network port.
 // Vite itself calls the environment listeners before the HTTP listening event.

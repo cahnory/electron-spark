@@ -3,12 +3,12 @@ import { test } from "node:test";
 
 import { createIntl, createIntlCache } from "react-intl";
 
-import { en } from "./src/view/messages/en.ts";
-import { fr } from "./src/view/messages/fr.ts";
+import { en } from "../src/view/messages/en.ts";
+import { fr } from "../src/view/messages/fr.ts";
 
 for (const [locale, messages] of Object.entries({ en, fr })) {
   void test(`${locale} messages are complete and format without ICU errors`, () => {
-    assert.deepEqual(Object.keys(messages).sort(), Object.keys(en).sort());
+    assert.deepEqual(Object.keys(messages).toSorted(), Object.keys(en).toSorted());
     const intl = createIntl(
       {
         locale,

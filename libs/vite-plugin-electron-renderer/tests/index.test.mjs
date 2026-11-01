@@ -6,10 +6,10 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { buildOnServe } from "@electron-start/vite-plugin-build-on-serve";
 import { createBuilder, createServer } from "vite";
 
-import { buildOnServe } from "../vite-plugin-build-on-serve/src/index.ts";
-import { electronRenderer } from "./src/index.ts";
+import { electronRenderer, readRendererWindow } from "../src/index.ts";
 
 async function fixture(t) {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "renderer-metadata-")));
@@ -100,7 +100,7 @@ renderer.renderers["panels/help"].window.webPreferences;
   execFileSync(
     process.execPath,
     [
-      fileURLToPath(new URL("../../node_modules/typescript/bin/tsc", import.meta.url)),
+      fileURLToPath(new URL("../../../node_modules/typescript/bin/tsc", import.meta.url)),
       "--noEmit",
       "--strict",
       "--skipLibCheck",
@@ -112,7 +112,7 @@ renderer.renderers["panels/help"].window.webPreferences;
       "--types",
       "node",
       "--typeRoots",
-      fileURLToPath(new URL("../../node_modules/@types", import.meta.url)),
+      fileURLToPath(new URL("../../../node_modules/@types", import.meta.url)),
       `${root}/consumer.ts`,
     ],
     { cwd: root, encoding: "utf8" },
@@ -120,15 +120,17 @@ renderer.renderers["panels/help"].window.webPreferences;
 }
 async function until(fn) {
   let lastError;
-  for (let i = 0; i < 200; i++) {
+  const attempt = async (remaining) => {
     try {
       if (await fn()) return;
     } catch (error) {
       lastError = error;
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  throw new Error("Timed out waiting for generated renderer metadata", { cause: lastError });
+    if (remaining > 1) return attempt(remaining - 1);
+    throw new Error("Timed out waiting for generated renderer metadata", { cause: lastError });
+  };
+  return attempt(200);
 }
 
 void test("build collects emitted filenames before compiling main and discovers arbitrary renderer paths and optional preloads", async (t) => {
@@ -159,8 +161,8 @@ for (const fromFile of [false, true])
       await writeFile(
         `${root}/vite.config.mjs`,
         `
-      import { electronRenderer } from ${JSON.stringify(new URL("./src/index.ts", import.meta.url).href)};
-      import { buildOnServe } from ${JSON.stringify(new URL("../vite-plugin-build-on-serve/src/index.ts", import.meta.url).href)};
+      import { electronRenderer } from ${JSON.stringify(new URL("../src/index.ts", import.meta.url).href)};
+      import { buildOnServe } from ${JSON.stringify(import.meta.resolve("@electron-start/vite-plugin-build-on-serve"))};
       export default { ...${JSON.stringify(config)}, plugins: [electronRenderer(${JSON.stringify(options)}), buildOnServe("preload"), buildOnServe("electron")] };
     `,
       );
@@ -375,7 +377,8 @@ for (const filename of [undefined, "metadata/windows.ts"]) {
 
 void test("rejects missing or ambiguous Electron inputs", async (t) => {
   const { config } = await fixture(t);
-  for (const input of [[], ["main.js", "other.js"]]) {
+  await [[], ["main.js", "other.js"]].reduce(async (previous, input) => {
+    await previous;
     config.environments.electron.input = input;
     await assert.rejects(
       createBuilder({
@@ -384,7 +387,7 @@ void test("rejects missing or ambiguous Electron inputs", async (t) => {
       }),
       /must have exactly one input/,
     );
-  }
+  }, Promise.resolve());
 });
 
 void test("reads HTML metadata and merges configurable window options with the emitted preload", async (t) => {
@@ -482,15 +485,17 @@ void test("shares a preload outside renderer directories using a nested custom J
   await mkdir(`${root}/shared`);
   await writeFile(`${root}/shared/bridge.ts`, 'console.log("shared")');
   config.environments.preload.input = "shared/bridge.ts";
-  for (const directory of ["screens/settings", "panels/help"]) {
-    await mkdir(`${root}/${directory}/config`);
-    await writeFile(
-      `${root}/${directory}/config/display.json`,
-      JSON.stringify({
-        webPreferences: { preload: "../../../shared/bridge.ts", sandbox: true },
-      }),
-    );
-  }
+  await Promise.all(
+    ["screens/settings", "panels/help"].map(async (directory) => {
+      await mkdir(`${root}/${directory}/config`);
+      await writeFile(
+        `${root}/${directory}/config/display.json`,
+        JSON.stringify({
+          webPreferences: { preload: "../../../shared/bridge.ts", sandbox: true },
+        }),
+      );
+    }),
+  );
   await (await createBuilder({ ...config, plugins: [electronRenderer(options)] })).buildApp();
   const result = await data(root);
   const settings = result.renderers["screens/settings"].window.webPreferences;
@@ -508,22 +513,23 @@ void test("ignores colocated server entries when no preload is declared", async 
 
 void test("validates declared preload sources and requires a matching environment", async (t) => {
   const { root, options, config } = await fixture(t);
-  const { readRendererWindow } = await import("./src/index.ts");
   const file = `${root}/screens/settings/window.json`;
-  for (const preload of [null, false, 42, "", " "]) {
+  await [null, false, 42, "", " "].reduce(async (previous, preload) => {
+    await previous;
     await writeFile(file, JSON.stringify({ webPreferences: { preload } }));
     assert.throws(
       () => readRendererWindow(`${root}/screens/settings/index.html`),
       /non-empty string/,
     );
-  }
-  for (const preload of ["missing.ts", "."]) {
+  }, Promise.resolve());
+  await ["missing.ts", "."].reduce(async (previous, preload) => {
+    await previous;
     await writeFile(file, JSON.stringify({ webPreferences: { preload } }));
     assert.throws(
       () => readRendererWindow(`${root}/screens/settings/index.html`),
       /not a file.*window.json/,
     );
-  }
+  }, Promise.resolve());
   await writeFile(file, JSON.stringify({ webPreferences: { preload: "./bridge.js" } }));
   delete config.environments.preload;
   await assert.rejects(
@@ -581,8 +587,8 @@ void test("reloads file-based environments after changing, removing and adding a
   await writeFile(
     configFile,
     `
-    import { electronRenderer, readRendererWindow } from ${JSON.stringify(new URL("./src/index.ts", import.meta.url).href)};
-    import { buildOnServe } from ${JSON.stringify(new URL("../vite-plugin-build-on-serve/src/index.ts", import.meta.url).href)};
+    import { electronRenderer, readRendererWindow } from ${JSON.stringify(new URL("../src/index.ts", import.meta.url).href)};
+    import { buildOnServe } from ${JSON.stringify(import.meta.resolve("@electron-start/vite-plugin-build-on-serve"))};
     export default () => {
       const config = ${JSON.stringify(config)};
       const { preload } = readRendererWindow(${JSON.stringify(`${root}/screens/settings/index.html`)});
@@ -646,8 +652,8 @@ void test("discovers view lifecycle changes and recovers missing preloads with a
   await writeFile(
     configFile,
     `
-    import { electronRenderer, discoverRendererHtml, readRendererWindow } from ${JSON.stringify(new URL("./src/index.ts", import.meta.url).href)};
-    import { buildOnServe } from ${JSON.stringify(new URL("../vite-plugin-build-on-serve/src/index.ts", import.meta.url).href)};
+    import { electronRenderer, discoverRendererHtml, readRendererWindow } from ${JSON.stringify(new URL("../src/index.ts", import.meta.url).href)};
+    import { buildOnServe } from ${JSON.stringify(import.meta.resolve("@electron-start/vite-plugin-build-on-serve"))};
     export default () => {
       const config = ${JSON.stringify(config)};
       const options = ${JSON.stringify(dynamicOptions)};
@@ -677,8 +683,9 @@ void test("discovers view lifecycle changes and recovers missing preloads with a
     const keys = async (...expected) =>
       until(
         async () =>
-          JSON.stringify(Object.keys((await data(root)).renderers).toSorted()) ===
-          JSON.stringify(expected.toSorted()),
+          JSON.stringify(
+            Object.keys((await data(root)).renderers).toSorted((a, b) => a.localeCompare(b)),
+          ) === JSON.stringify(expected.toSorted((a, b) => a.localeCompare(b))),
       );
     await keys();
     const originalServer = server.httpServer;

@@ -11,7 +11,7 @@ import {
   DevEnvironment,
 } from "vite";
 
-import { electronMain } from "./src/index.ts";
+import { electronMain } from "../src/index.ts";
 
 // Exercise the standalone HTTP lifecycle without opening a network port.
 // Vite itself calls the environment listeners before the HTTP listening event.
@@ -80,7 +80,7 @@ for (const fromFile of [false, true]) {
       if (fromFile) {
         await writeFile(
           `${root}/vite.config.mjs`,
-          `import { electronMain } from ${JSON.stringify(new URL("./src/index.ts", import.meta.url).href)}; export default { plugins: electronMain() };`,
+          `import { electronMain } from ${JSON.stringify(new URL("../src/index.ts", import.meta.url).href)}; export default { plugins: electronMain() };`,
         );
       }
       let launcher,

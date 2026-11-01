@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { defineElectronConfig } from "./src/index.ts";
+import { defineElectronConfig } from "../src/index.ts";
 
 const context = { command: "build", mode: "production" };
 

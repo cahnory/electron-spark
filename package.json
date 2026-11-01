@@ -19,8 +19,22 @@
     ]
   },
   "type": "module",
+  "scripts": {
+    "check": "concurrently --names format,lint,test,types,unused --group \"pnpm check:format\" \"pnpm check:lint\" \"pnpm check:test\" \"pnpm check:types\" \"pnpm check:unused\"",
+    "check:format": "oxfmt --check",
+    "check:lint": "oxlint --deny-warnings",
+    "check:test": "pnpm --reporter=append-only -r --no-bail --aggregate-output run check:test",
+    "check:types": "concurrently --names root,packages --group \"tsc --noEmit\" \"pnpm --reporter=append-only -r --no-bail --aggregate-output run check:types\"",
+    "check:unused": "knip",
+    "fix": "concurrently -r -m 1 pnpm:fix:unused pnpm:fix:lint pnpm:fix:format",
+    "fix:format": "oxfmt",
+    "fix:lint": "oxlint --fix",
+    "fix:unused": "knip --fix"
+  },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "concurrently": "^10.0.6",
+    "knip": "^6.44.1",
     "oxfmt": "^0.72.0",
     "oxlint": "^1.87.0",
     "oxlint-tsgolint": "^7.0.2004",

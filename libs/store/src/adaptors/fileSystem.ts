@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import type { StorageAdapter } from "../store";
+import type { StorageAdapter } from "../store.ts";
 
 /** Stores JSON-compatible values. Existing file contents are not validated. */
 export const createFileSystemAdaptor = <T>(filePath: string, init: T): StorageAdapter<T> => {

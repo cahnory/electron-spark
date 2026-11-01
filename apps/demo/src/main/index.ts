@@ -8,7 +8,7 @@ import { app } from "electron";
 import { IS_MAC_OS, MODE } from "./constants.ts";
 import { createRenderer } from "./core/windowManager.ts";
 import data from "./renderers.generated.ts";
-import { createSettings } from "./settings/index.ts";
+import { createSettings } from "./settings.ts";
 
 const renderers = createRenderer(data);
 

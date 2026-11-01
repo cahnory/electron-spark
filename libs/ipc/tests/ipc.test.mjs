@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
+
+import { createFileSystemAdaptor } from "@electron-start/store";
 
 import { assertIpcData } from "../src/data.ts";
 import {
@@ -9,7 +14,12 @@ import {
   createIpcApiBridge,
   createIpcState,
   createIpcStateBridge,
+  createIpcRendererServer,
+  createIpcRendererBridge,
+  createIpcEventSender,
+  createIpcEventBridge,
 } from "../src/index.ts";
+import { getIpcContext } from "../src/main.ts";
 import { readResponse } from "../src/response.ts";
 import { getChannel } from "../src/transport.ts";
 
@@ -309,39 +319,40 @@ void test("state validates and orders commits; invalid commits do not poison the
   assert.equal(state.getState(), 3);
 });
 
+const check = (value) =>
+  typeof value.nested.count === "number" ? { value } : { issues: [{ message: "number required" }] };
+
 void test("initial state owns nested data before validation yields", async () => {
-  for (const asynchronous of [false, true]) {
-    const initial = { nested: { count: 1 } };
-    let release;
-    const gate = new Promise((resolve) => {
-      release = resolve;
-    });
-    const check = (value) =>
-      typeof value.nested.count === "number"
-        ? { value }
-        : { issues: [{ message: "number required" }] };
-    const validator = {
-      "~standard": {
-        version: 1,
-        vendor: "test",
-        validate: asynchronous
-          ? async (value) => {
-              await gate;
-              return check(value);
-            }
-          : check,
-      },
-    };
-    const pending = createIpcState("initial-ownership", {
-      initialState: initial,
-      schema: validator,
-      authorize,
-    });
-    initial.nested.count = "invalid";
-    release();
-    const state = await pending;
-    assert.deepEqual(state.getState(), { nested: { count: 1 } });
-  }
+  await Promise.all(
+    [false, true].map(async (asynchronous) => {
+      const initial = { nested: { count: 1 } };
+      let release;
+      const gate = new Promise((resolve) => {
+        release = resolve;
+      });
+      const validator = {
+        "~standard": {
+          version: 1,
+          vendor: "test",
+          validate: asynchronous
+            ? async (value) => {
+                await gate;
+                return check(value);
+              }
+            : check,
+        },
+      };
+      const pending = createIpcState("initial-ownership", {
+        initialState: initial,
+        schema: validator,
+        authorize,
+      });
+      initial.nested.count = "invalid";
+      release();
+      const state = await pending;
+      assert.deepEqual(state.getState(), { nested: { count: 1 } });
+    }),
+  );
 });
 
 void test("state snapshots own their data and destroyed senders are removed", async () => {
@@ -642,7 +653,6 @@ void test("lifecycle watchers are shared across state services and removed on de
 });
 
 void test("caller context survives awaits and isolates concurrent frames", async () => {
-  const { getIpcContext } = await import("../src/main.ts");
   const t = transport();
   const second = { ...t.frame, routingId: 2 };
   const action = defineIpcAction({
@@ -668,7 +678,6 @@ void test("caller context survives awaits and isolates concurrent frames", async
 });
 
 void test("timeouts and AbortSignal cancel main work and release pending authorization", async () => {
-  const { getIpcContext } = await import("../src/main.ts");
   const t = transport();
   let signal;
   const action = defineIpcAction({
@@ -840,7 +849,6 @@ void test("heartbeat detects lost disconnect messages and disposal bounds unreso
 });
 
 void test("reverse RPC validates handlers, rejects spoofed replies, and handles detachment", async () => {
-  const { createIpcRendererServer, createIpcRendererBridge } = await import("../src/index.ts");
   const t = transport();
   const server = createIpcRendererServer(
     "reverse",
@@ -870,7 +878,6 @@ void test("reverse RPC validates handlers, rejects spoofed replies, and handles 
 });
 
 void test("transient events validate payloads and remove listeners", async () => {
-  const { createIpcEventSender, createIpcEventBridge } = await import("../src/index.ts");
   const t = transport();
   const sender = createIpcEventSender("progress", number, { authorize });
   const bridge = createIpcEventBridge(t.renderer, "progress", number);
@@ -947,7 +954,6 @@ void test("abandoned state leases expire and timed-out updaters do not block lat
 });
 
 void test("main validates reverse responses and rejects a spoofed active request reply", async () => {
-  const { createIpcRendererServer } = await import("../src/main.ts");
   const t = transport();
   const server = createIpcRendererServer(
     "untrusted-response",
@@ -1048,10 +1054,6 @@ void test("persistent state publishes only after saving and recovers from failed
 });
 
 void test("persistent state works with filesystem adapters and owns saved data", async (context) => {
-  const { mkdtemp, rm } = await import("node:fs/promises");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
-  const { createFileSystemAdaptor } = await import("../../store/src/adaptors/fileSystem.ts");
   const directory = await mkdtemp(join(tmpdir(), "ipc-state-"));
   context.after(() => rm(directory, { recursive: true, force: true }));
   const storage = createFileSystemAdaptor(join(directory, "settings.json"), { locale: "en" });

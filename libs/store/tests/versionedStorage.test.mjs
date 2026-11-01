@@ -21,37 +21,41 @@ const countValidator = {
 };
 
 void test("validates current and migrated payloads and returns the validator result", async () => {
-  for (const version of [1, 2]) {
-    const original = { version, data: { count: 3, extra: true } };
-    const adapter = createMemoryAdaptor(original);
-    const storage = createVersionedStorage({
-      storage: adapter,
-      version: 2,
-      migrate: (stored) => stored.data,
-      validator: countValidator,
-    });
-    assert.deepEqual(await storage.read(), { count: 3 });
-    assert.equal(adapter.read(), original);
-  }
+  await Promise.all(
+    [1, 2].map(async (version) => {
+      const original = { version, data: { count: 3, extra: true } };
+      const adapter = createMemoryAdaptor(original);
+      const storage = createVersionedStorage({
+        storage: adapter,
+        version: 2,
+        migrate: (stored) => stored.data,
+        validator: countValidator,
+      });
+      assert.deepEqual(await storage.read(), { count: 3 });
+      assert.equal(adapter.read(), original);
+    }),
+  );
 });
 
 void test("rejects invalid current and migrated payloads without overwriting storage", async () => {
-  for (const version of [1, 2]) {
-    const original = { version, data: { count: "invalid" } };
-    const adapter = createMemoryAdaptor(original);
-    const storage = createVersionedStorage({
-      storage: adapter,
-      version: 2,
-      migrate: (stored) => stored.data,
-      validator: countValidator,
-    });
-    await assert.rejects(storage.read(), (error) => {
-      assert.ok(error instanceof ValidationError);
-      assert.deepEqual(error.issues, [{ message: "Expected a numeric count" }]);
-      return true;
-    });
-    assert.equal(adapter.read(), original);
-  }
+  await Promise.all(
+    [1, 2].map(async (version) => {
+      const original = { version, data: { count: "invalid" } };
+      const adapter = createMemoryAdaptor(original);
+      const storage = createVersionedStorage({
+        storage: adapter,
+        version: 2,
+        migrate: (stored) => stored.data,
+        validator: countValidator,
+      });
+      await assert.rejects(storage.read(), (error) => {
+        assert.ok(error instanceof ValidationError);
+        assert.deepEqual(error.issues, [{ message: "Expected a numeric count" }]);
+        return true;
+      });
+      assert.equal(adapter.read(), original);
+    }),
+  );
 });
 
 void test("reads current data without migrating and wraps writes", async () => {
@@ -97,24 +101,26 @@ void test("compares versions by strict equality and rejects unsupported versions
 });
 
 void test("rejects malformed envelopes without attempting migration", async () => {
-  for (const value of [
-    null,
-    [],
-    1,
-    {},
-    { version: 1 },
-    { data: 1 },
-    { version: null, data: 1 },
-    { version: NaN, data: 1 },
-    Object.create({ version: 1, data: 1 }),
-  ]) {
-    const storage = createVersionedStorage({
-      storage: createMemoryAdaptor(value),
-      version: 2,
-      migrate: () => assert.fail("Malformed envelopes must not be migrated"),
-    });
-    await assert.rejects(storage.read(), TypeError);
-  }
+  await Promise.all(
+    [
+      null,
+      [],
+      1,
+      {},
+      { version: 1 },
+      { data: 1 },
+      { version: null, data: 1 },
+      { version: NaN, data: 1 },
+      Object.create({ version: 1, data: 1 }),
+    ].map(async (value) => {
+      const storage = createVersionedStorage({
+        storage: createMemoryAdaptor(value),
+        version: 2,
+        migrate: () => assert.fail("Malformed envelopes must not be migrated"),
+      });
+      await assert.rejects(storage.read(), TypeError);
+    }),
+  );
   for (const version of [NaN, Infinity, null]) {
     assert.throws(
       () => createVersionedStorage({ storage: createMemoryAdaptor(null), version }),
@@ -127,18 +133,20 @@ void test("propagates migration and adapter errors without resetting data", asyn
   const original = { version: 1, data: "old" };
   const adapter = createMemoryAdaptor(original);
   const error = new Error("Migration failed");
-  for (const migrate of [
-    () => {
-      throw error;
-    },
-    async () => {
-      throw error;
-    },
-  ]) {
-    const storage = createVersionedStorage({ storage: adapter, version: 2, migrate });
-    await assert.rejects(storage.read(), (caught) => caught === error);
-    assert.equal(adapter.read(), original);
-  }
+  await Promise.all(
+    [
+      () => {
+        throw error;
+      },
+      async () => {
+        throw error;
+      },
+    ].map(async (migrate) => {
+      const storage = createVersionedStorage({ storage: adapter, version: 2, migrate });
+      await assert.rejects(storage.read(), (caught) => caught === error);
+      assert.equal(adapter.read(), original);
+    }),
+  );
   const storage = createVersionedStorage({
     storage: {
       read: async () => {

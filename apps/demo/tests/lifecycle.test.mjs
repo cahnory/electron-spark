@@ -32,12 +32,12 @@ const app = Object.assign(new EventEmitter(), {
 });
 mock.module("electron", { namedExports: { app, BrowserWindow, shell: {} } });
 const provided = new Set();
-mock.module("./src/main/settings/index.ts", {
+mock.module("../src/main/settings.ts", {
   namedExports: { createSettings: async () => ({ provideTo: (window) => provided.add(window) }) },
 });
 
 void test("activation reopens a closed window and grants settings access", async () => {
-  await import("./src/main/index.ts");
+  await import("../src/main/index.ts");
   await setImmediate();
   assert.equal(windows.length, 1);
   assert.ok(provided.has(windows[0]));

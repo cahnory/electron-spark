@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 
 import { routeTree } from "../routeTree.generated";
 
-export const router = createRouter({ history: createHashHistory(), routeTree });
+const router = createRouter({ history: createHashHistory(), routeTree });
 
 declare module "@tanstack/react-router" {
   interface Register {

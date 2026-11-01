@@ -1,5 +1,5 @@
-import { type MutationQueue, createMutationQueue } from "./mutationQueue";
-import { type Validator, validate } from "./validator";
+import { type MutationQueue, createMutationQueue } from "./mutationQueue.ts";
+import { type Validator, validate } from "./validator.ts";
 
 export type StorageAdapter<T> = {
   read: () => T | Promise<T>;

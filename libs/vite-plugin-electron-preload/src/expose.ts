@@ -12,7 +12,7 @@ export function electronPreloadExpose(environmentName = "preload"): Plugin {
   return {
     name: `@electron-start/vite-plugin-electron-preload:expose:${environmentName}`,
     enforce: "pre",
-    configResolved: entries.configure,
+    configResolved: (config) => entries.configure(config),
     options(options) {
       if (this.environment.name !== environmentName) return null;
       const input = options.input;

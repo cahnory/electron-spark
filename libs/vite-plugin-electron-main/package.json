@@ -36,7 +36,12 @@
   },
   "scripts": {
     "build": "tsdown",
-    "test": "node --test index.test.mjs"
+    "check": "concurrently --names format,lint,test,types --group \"pnpm check:format\" \"pnpm check:lint\" \"pnpm check:test\" \"pnpm check:types\"",
+    "check:format": "oxfmt --check .",
+    "check:lint": "oxlint --deny-warnings .",
+    "check:test": "node --test --test-reporter=../../scripts/test-reporter.mjs tests/*.test.mjs",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm check:test"
   },
   "dependencies": {
     "@electron-start/vite-plugin-build-on-serve": "workspace:*"

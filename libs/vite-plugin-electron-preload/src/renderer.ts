@@ -12,7 +12,7 @@ export function electronPreloadRenderer(environmentName = "preload"): Plugin {
   return {
     name: `@electron-start/vite-plugin-electron-preload:renderer:${environmentName}`,
     enforce: "pre",
-    configResolved: entries.configure,
+    configResolved: (config) => entries.configure(config),
     async load(id) {
       if (this.environment.config.consumer !== "client" || !entries.has(id)) return null;
 
@@ -27,7 +27,8 @@ export function electronPreloadRenderer(environmentName = "preload"): Plugin {
         const { code } = await transformWithOxc(source, file);
         const ast = this.parse(code);
         const names = new Set<string>();
-        for (const node of ast.body) {
+        await ast.body.reduce(async (previous, node) => {
+          await previous;
           if (node.type === "ExportDefaultDeclaration") names.add("default");
           if (node.type === "ExportNamedDeclaration") {
             for (const specifier of node.specifiers) {
@@ -66,7 +67,7 @@ export function electronPreloadRenderer(environmentName = "preload"): Plugin {
                 if (name !== "default") names.add(name);
             }
           }
-        }
+        }, Promise.resolve());
         return names;
       };
       const names = await exportsOf(id);

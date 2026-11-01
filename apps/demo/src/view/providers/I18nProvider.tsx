@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { IntlProvider } from "react-intl";
 
-import type { Settings } from "../../main/settings/index.ts";
+import type { Settings } from "../../main/settings.ts";
 import { en } from "../messages/en";
 import { fr } from "../messages/fr";
 import { settings } from "../preload";
