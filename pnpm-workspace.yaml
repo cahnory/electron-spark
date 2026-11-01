@@ -3,4 +3,5 @@ packages:
   - "apps/*"
   - "libs/*"
 allowBuilds:
+  electron-winstaller: true
   esbuild: true
