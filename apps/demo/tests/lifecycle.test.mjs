@@ -31,21 +31,23 @@ const app = Object.assign(new EventEmitter(), {
   getName: () => "demo",
 });
 mock.module("electron", { namedExports: { app, BrowserWindow, shell: {}, dialog: {} } });
-const provided = new Set();
+const provided = [];
 mock.module("../src/main/settings.ts", {
-  namedExports: { createSettings: async () => ({ provideTo: (window) => provided.add(window) }) },
+  namedExports: { createSettings: async () => ({ provideTo: (window) => provided.push(window) }) },
 });
 
 void test("activation reopens a closed window and grants settings access", async () => {
   await import("../src/main/index.ts");
   await setImmediate();
   assert.equal(windows.length, 1);
-  assert.ok(provided.has(windows[0]));
+  assert.ok(provided.includes(windows[0]));
   app.emit("activate");
   assert.equal(windows.length, 1);
+  assert.equal(provided.length, 1);
   windows[0].destroyed = true;
   app.emit("activate");
   assert.equal(windows.length, 2);
+  assert.equal(provided.length, 2);
   assert.ok(windows[1].focused);
-  assert.ok(provided.has(windows[1]));
+  assert.ok(provided.includes(windows[1]));
 });

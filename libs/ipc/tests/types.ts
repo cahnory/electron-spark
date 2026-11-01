@@ -161,3 +161,24 @@ void createIpcState("duplicate-source", {
   schema: number,
   authorize: () => true,
 });
+
+const { createIpcService } = await import("../src/main.ts");
+const service = await createIpcService("typed-service", {
+  initialState: 0,
+  schema: number,
+  authorize: () => true,
+  actions: (serviceState) => ({
+    read: defineIpcAction({ params: empty, handler: () => serviceState.getState() }),
+  }),
+});
+const serviceCount: number = service.state.getState();
+void serviceCount;
+// @ts-expect-error service state retains its schema type
+void service.state.setState("wrong");
+const serviceClient = createIpcApiBridge<typeof service.actions>(renderer, "typed-service", {
+  read: true,
+});
+const serviceResult: Promise<number> = serviceClient.read();
+void serviceResult;
+// @ts-expect-error composed actions preserve argument types
+void serviceClient.read(1);

@@ -30,3 +30,5 @@ export { createIpcRendererBridge } from "./rendererBridge.ts";
 export { createIpcEventSender } from "./eventSender.ts";
 export { createIpcEventBridge } from "./events.ts";
 export type { IpcConnectionStatus } from "./stateBridge.ts";
+export { createIpcAccessPolicy } from "./accessPolicy.ts";
+export { createIpcService, type IpcServiceOptions, type IpcState } from "./service.ts";

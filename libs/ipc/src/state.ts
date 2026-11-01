@@ -233,6 +233,13 @@ export async function createIpcState<Data extends IpcData>(
         for (const name of registered) ipcMain.removeHandler(name);
         throw error;
       }
+      const stopRevocations = options.authorize.onRevoke?.((sender) => {
+        for (const entry of pending.values())
+          if (entry.event.sender === sender)
+            entry.controller.abort(new Error("IPC access revoked"));
+        for (const subscriber of subscribers.values())
+          if (subscriber.sender === sender) subscriber.cleanup();
+      });
       publishers.add(publish);
       const dispose = () => {
         if (!active) return;
@@ -240,6 +247,7 @@ export async function createIpcState<Data extends IpcData>(
         clearInterval(leaseTimer);
         for (const entry of pending.values())
           entry.controller.abort(new Error("IPC state disposed"));
+        stopRevocations?.();
         publishers.delete(publish);
         for (const subscriber of subscribers.values()) subscriber.cleanup();
         for (const name of registered) ipcMain.removeHandler(name);

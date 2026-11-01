@@ -284,3 +284,53 @@ concurrency, lifetime races, recovery, state projections, events, and reverse RP
 They do not launch Electron windows. The transport follows Electron's
 [frame API](https://www.electronjs.org/docs/latest/api/web-frame-main); caller
 context uses Node's [AsyncLocalStorage](https://nodejs.org/api/async_context.html).
+
+## State services and document grants
+
+`createIpcService` optionally combines state and commands on the same channel.
+It accepts the options of `createIpcState` (including either `initialState` or
+`storage`) plus an `actions(state)` factory. It returns `state`, `actions`, and
+`attach(ipcMain)`. Attachment rolls back if either server fails; the returned
+cleanup detaches both servers and can be called repeatedly. State remains usable
+in main after detachment, and the service can be attached again.
+
+```ts
+import { createIpcAccessPolicy, createIpcService, defineIpcAction } from "@electron-start/ipc/main";
+import { app, ipcMain } from "electron";
+import { z } from "zod";
+
+const access = createIpcAccessPolicy();
+const counter = await createIpcService("counter", {
+  initialState: 0,
+  schema: z.number(),
+  authorize: access.authorize,
+  actions: (state) => ({
+    increment: defineIpcAction({
+      params: z.tuple([]),
+      handler: () => state.setState((value) => value + 1),
+    }),
+  }),
+});
+const detach = counter.attach(ipcMain);
+app.once("will-quit", detach);
+// Supply the window and trusted URL chosen by your application.
+const revoke = access.grant(window.webContents, trustedDocumentUrl);
+// Call revoke() when this window should lose access.
+```
+
+Grants require the registered sender's current main frame and a matching document
+URL, including search and hash by default. Opt into `{ ignoreSearch: true,
+ignoreHash: true }` when routing uses those components. Pass a trusted URL from
+application configuration, not the sender's requested URL. The policy uses
+structural interfaces and does not import Electron. It can also authorize a
+standalone API server or state server.
+
+Revoking or replacing a grant immediately disconnects that sender's state
+subscriptions and aborts pending API requests and subscriptions. An old grant's
+cleanup cannot revoke its replacement. Cancellation cannot undo actions already
+performed; running handlers should observe `getIpcContext().signal` before further
+side effects. A new grant permits new requests and explicit state reconnection.
+Pass `access.authorize` directly to preserve its `onRevoke` notification hook;
+custom authorization wrappers must forward that hook to retain immediate
+revocation. Application code owns window selection and process shutdown;
+storage adapters own file paths, defaults, and migrations.

@@ -40,7 +40,10 @@ export interface IpcRendererTransport {
 }
 export type Cleanup = () => void;
 /** Authorize the calling frame, not just the WebContents containing it. */
-export type Authorize = (event: IpcRequestEvent, action: string) => boolean | Promise<boolean>;
+export type Authorize = ((event: IpcRequestEvent, action: string) => boolean | Promise<boolean>) & {
+  /** Notify attached servers synchronously when a sender's grant is revoked or replaced. */
+  onRevoke?: (listener: (sender: IpcSender) => void) => Cleanup;
+};
 export type ServerOptions = {
   authorize: Authorize;
   includeErrorStack?: boolean;

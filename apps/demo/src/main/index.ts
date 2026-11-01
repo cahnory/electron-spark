@@ -47,12 +47,14 @@ const registerAppLifecycle = (): void => {
 
 const initializeMainProcess = (settings: Awaited<ReturnType<typeof createSettings>>): void => {
   // startUpdater();
-  const window = mainWindow.create();
-  const documentUrl =
-    data.mode === "serve"
-      ? new URL(data.renderers.view.url)
-      : pathToFileURL(data.renderers.view.path);
-  settings.provideTo(window, documentUrl);
+  if (!mainWindow.has()) {
+    const window = mainWindow.create();
+    const documentUrl =
+      data.mode === "serve"
+        ? new URL(data.renderers.view.url)
+        : pathToFileURL(data.renderers.view.path);
+    settings.provideTo(window, documentUrl);
+  }
   mainWindow.focus();
 };
 

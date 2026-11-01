@@ -109,6 +109,11 @@ export function createIpcApiServer<const Actions extends IpcActions>(
         for (const name of registered) ipcMain.removeHandler(name);
         throw error;
       }
+      const stopRevocations = options.authorize.onRevoke?.((sender) => {
+        for (const request of pending.values())
+          if (request.event.sender === sender)
+            request.controller.abort(new Error("IPC access revoked"));
+      });
       attached.add(ipcMain);
       return () => {
         if (!active) return;
@@ -116,6 +121,7 @@ export function createIpcApiServer<const Actions extends IpcActions>(
         for (const request of pending.values())
           request.controller.abort(new Error("IPC API server disposed"));
         for (const name of registered) ipcMain.removeHandler(name);
+        stopRevocations?.();
         attached.delete(ipcMain);
       };
     },

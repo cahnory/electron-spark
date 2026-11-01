@@ -9,6 +9,8 @@ import { createFileSystemAdaptor } from "@electron-start/store";
 
 import { assertIpcData } from "../src/data.ts";
 import {
+  createIpcAccessPolicy,
+  createIpcService,
   defineIpcAction,
   createIpcApiServer,
   createIpcApiBridge,
@@ -1155,4 +1157,194 @@ void test("persistent state works with filesystem adapters and owns saved data",
   });
   await isolated.setState({ count: 1 });
   assert.deepEqual(isolated.getState(), { count: 1 });
+});
+
+void test("access grants bind sender, main frame and document with explicit URL matching", () => {
+  const t = transport();
+  t.sender.mainFrame = t.frame;
+  const policy = createIpcAccessPolicy();
+  assert.equal(policy.authorize(t.event, "read"), false);
+  const trustedUrl = new URL(t.frame.url);
+  const old = policy.grant(t.sender, trustedUrl);
+  trustedUrl.pathname = "/changed";
+  assert.equal(policy.authorize(t.event, "read"), true);
+  assert.equal(policy.authorize({ ...t.event, sender: transport().sender }, "read"), false);
+  assert.equal(policy.authorize({ ...t.event, senderFrame: { ...t.frame } }, "read"), false);
+  assert.equal(policy.authorize({ ...t.event, senderFrame: null }, "read"), false);
+  for (const url of [
+    "app://other/",
+    "app://test/other",
+    "app://test/?q=1",
+    "app://test/#route",
+    "invalid",
+  ]) {
+    t.frame.url = url;
+    assert.equal(policy.authorize(t.event, "read"), false);
+  }
+  t.frame.url = "app://test/";
+  const revoke = policy.grant(t.sender, new URL(t.frame.url));
+  old();
+  assert.equal(policy.authorize(t.event, "read"), true);
+  revoke();
+  revoke();
+  assert.equal(policy.authorize(t.event, "read"), false);
+  const routed = createIpcAccessPolicy({ ignoreSearch: true, ignoreHash: true });
+  routed.grant(t.sender, new URL(t.frame.url));
+  t.frame.url += "?q=1#route";
+  assert.equal(routed.authorize(t.event, "read"), true);
+  t.sender.isDestroyed = () => true;
+  assert.equal(routed.authorize(t.event, "read"), false);
+});
+
+void test("service composes persisted state and typed actions and rolls back partial attachment", async () => {
+  const t = transport();
+  let stored = 1;
+  const service = await createIpcService("service", {
+    schema: number,
+    storage: {
+      read: () => stored,
+      write: (value) => {
+        stored = value;
+      },
+    },
+    authorize,
+    actions: (state) => ({
+      increment: defineIpcAction({
+        params: noArgs,
+        handler: () => state.setState((value) => value + 1),
+      }),
+    }),
+  });
+  const collision = getChannel("call", "service", "increment");
+  const existing = authorize;
+  t.main.handle(collision, existing);
+  assert.throws(() => service.attach(t.main), /Duplicate handler/);
+  assert.equal(t.handlers.size, 1);
+  assert.equal(t.handlers.get(collision), existing);
+  t.main.removeHandler(collision);
+  const detach = service.attach(t.main);
+  assert.throws(() => service.attach(t.main), /already attached/);
+  const api = createIpcApiBridge(t.renderer, "service", { increment: true });
+  await api.increment();
+  assert.equal(service.state.getState(), 2);
+  assert.equal(stored, 2);
+  detach();
+  detach();
+  assert.equal(t.handlers.size, 0);
+  service.attach(t.main)();
+});
+
+void test("revoking or replacing a grant immediately disconnects subscriptions and denies commands", async () => {
+  const t = transport();
+  t.sender.mainFrame = t.frame;
+  const access = createIpcAccessPolicy();
+  let revoke = access.grant(t.sender, new URL(t.frame.url));
+  const service = await createIpcService("grants", {
+    initialState: 0,
+    schema: number,
+    authorize: access.authorize,
+    actions: (state) => ({
+      increment: defineIpcAction({
+        params: noArgs,
+        handler: () => state.setState((value) => value + 1),
+      }),
+    }),
+  });
+  const detach = service.attach(t.main);
+  try {
+    const updates = [];
+    const statuses = [];
+    t.events.on(getChannel("state", "grants"), (_event, value) => updates.push(value));
+    t.events.on(getChannel("state-status", "grants"), (_event, value) => statuses.push(value));
+    const exerciseRevocation = async (replace) => {
+      readResponse(await t.renderer.invoke(getChannel("state-subscribe", "grants"), "owner"));
+      if (replace) revoke = access.grant(t.sender, new URL(t.frame.url));
+      else revoke();
+      assert.equal(statuses.at(-1).status, "disconnected");
+      await service.state.setState((value) => value + 1);
+      assert.equal(updates.length, 0);
+      if (!replace) {
+        const api = createIpcApiBridge(t.renderer, "grants", { increment: true });
+        await assert.rejects(api.increment(), /access denied/);
+        revoke = access.grant(t.sender, new URL(t.frame.url));
+      }
+    };
+    await exerciseRevocation(false);
+    await exerciseRevocation(true);
+    revoke();
+  } finally {
+    detach();
+  }
+  assert.equal(t.sender.listenerCount("did-frame-navigate"), 0);
+});
+
+void test("revocation cancels subscriptions awaiting authorization", async () => {
+  const t = transport();
+  t.sender.mainFrame = t.frame;
+  const policy = createIpcAccessPolicy();
+  const revoke = policy.grant(t.sender, new URL(t.frame.url));
+  let resolve;
+  const delayed = Object.assign(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+    {
+      onRevoke: policy.authorize.onRevoke,
+    },
+  );
+  const state = await createIpcState("pending-grant", {
+    initialState: 0,
+    schema: number,
+    authorize: delayed,
+  });
+  const detach = state.attach(t.main);
+  try {
+    const pending = t.renderer.invoke(getChannel("state-subscribe", state.channel), "pending");
+    revoke();
+    resolve(true);
+    const response = await pending;
+    assert.throws(() => readResponse(response), /access revoked/);
+  } finally {
+    detach();
+  }
+});
+
+void test("revocation aborts a running API command and detachment removes policy listeners", async () => {
+  const t = transport();
+  t.sender.mainFrame = t.frame;
+  const policy = createIpcAccessPolicy();
+  const revoke = policy.grant(t.sender, new URL(t.frame.url));
+  let signal;
+  let started;
+  const ready = new Promise((resolve) => {
+    started = resolve;
+  });
+  const server = createIpcApiServer(
+    "revoke-command",
+    {
+      wait: defineIpcAction({
+        params: noArgs,
+        handler: async () => {
+          signal = getIpcContext().signal;
+          started();
+          await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+          signal.throwIfAborted();
+        },
+      }),
+    },
+    { authorize: policy.authorize },
+  );
+  const detach = server.attach(t.main);
+  try {
+    const api = createIpcApiBridge(t.renderer, "revoke-command", { wait: true });
+    const pending = api.wait();
+    await ready;
+    revoke();
+    assert.equal(signal.aborted, true);
+    await assert.rejects(pending, /access revoked/);
+  } finally {
+    detach();
+  }
+  assert.equal(t.sender.listenerCount("did-frame-navigate"), 0);
 });
