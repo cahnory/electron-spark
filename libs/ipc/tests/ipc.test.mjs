@@ -877,6 +877,86 @@ void test("reverse RPC validates handlers, rejects spoofed replies, and handles 
   assert.equal(t.sender.listenerCount("destroyed"), 0);
 });
 
+void test("reverse RPC timeout prevents a handler from starting after validation", async () => {
+  const t = transport();
+  let finishValidation;
+  let calls = 0;
+  const server = createIpcRendererServer("slow-renderer", { action: true }, { authorize });
+  const detach = server.attach(t.main);
+  const stop = createIpcRendererBridge(
+    t.renderer,
+    "slow-renderer",
+    {
+      action: defineIpcAction({
+        params: {
+          "~standard": {
+            version: 1,
+            vendor: "test",
+            validate: () =>
+              new Promise((resolve) => {
+                finishValidation = resolve;
+              }),
+          },
+        },
+        handler: () => {
+          calls++;
+        },
+      }),
+    },
+    { timeoutMs: 5 },
+  );
+  try {
+    await assert.rejects(server.client(t.event).action(), /timed out/);
+    finishValidation({ value: [] });
+    await tick();
+    assert.equal(calls, 0);
+  } finally {
+    stop();
+    detach();
+  }
+});
+
+for (const failure of ["denied", "throws", "timeout"]) {
+  void test(`failed heartbeat removes only the owning subscription: ${failure}`, async () => {
+    const t = transport();
+    let allowed = true;
+    const state = await createIpcState("heartbeat-revoked", {
+      initialState: 0,
+      schema: number,
+      timeoutMs: 10,
+      authorize: () => {
+        if (allowed) return true;
+        if (failure === "throws") throw new Error("Authorization failed");
+        if (failure === "timeout") return new Promise(() => {});
+        return false;
+      },
+    });
+    const detach = state.attach(t.main);
+    const updates = [];
+    t.events.on(getChannel("state", state.channel), (_event, update) => updates.push(update));
+    try {
+      readResponse(await t.renderer.invoke(getChannel("state-subscribe", state.channel), "owner"));
+      allowed = false;
+      const ping = t.handlers.get(getChannel("state-ping", state.channel));
+      const spoofed = await Promise.all(
+        [
+          { sender: t.sender, senderFrame: { ...t.frame } },
+          { sender: new EventEmitter(), senderFrame: t.frame },
+        ].map((stranger) => ping(stranger, "owner")),
+      );
+      assert.ok(spoofed.every((response) => response.ok === false));
+      await state.setState(1);
+      assert.equal(updates.length, 1);
+      assert.equal((await ping(t.event, "owner")).ok, false);
+      await state.setState(2);
+      assert.equal(updates.length, 1);
+      assert.equal(t.sender.listenerCount("destroyed"), 0);
+    } finally {
+      detach();
+    }
+  });
+}
+
 void test("transient events validate payloads and remove listeners", async () => {
   const t = transport();
   const sender = createIpcEventSender("progress", number, { authorize });

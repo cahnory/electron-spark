@@ -29,10 +29,12 @@ export function createIpcRendererBridge(
       return;
     const { id, action, args } = value;
     const execute = async () => {
+      const requestController = new AbortController();
       try {
         if (!Object.hasOwn(actions, action)) throw new Error("Unknown IPC renderer action");
         const signal = AbortSignal.any([
           controller.signal,
+          requestController.signal,
           ...(options.signal ? [options.signal] : []),
         ]);
         const data = await bounded(
@@ -42,6 +44,8 @@ export function createIpcRendererBridge(
         return { ok: true, data };
       } catch (error) {
         return errorResponse(error);
+      } finally {
+        requestController.abort(new Error("IPC renderer request finished"));
       }
     };
     void execute()

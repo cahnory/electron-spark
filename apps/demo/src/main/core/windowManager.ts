@@ -60,7 +60,7 @@ const createWindowManager = (options: RendererOptions) => {
       ...options.window,
       webPreferences: {
         contextIsolation: true,
-        nodeIntegration: true,
+        nodeIntegration: false,
         ...options.window.webPreferences,
       },
     });

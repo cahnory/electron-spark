@@ -30,7 +30,7 @@ const app = Object.assign(new EventEmitter(), {
   setAppUserModelId() {},
   getName: () => "demo",
 });
-mock.module("electron", { namedExports: { app, BrowserWindow, shell: {} } });
+mock.module("electron", { namedExports: { app, BrowserWindow, shell: {}, dialog: {} } });
 const provided = new Set();
 mock.module("../src/main/settings.ts", {
   namedExports: { createSettings: async () => ({ provideTo: (window) => provided.add(window) }) },

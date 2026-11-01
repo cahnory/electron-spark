@@ -131,14 +131,11 @@ export async function createIpcState<Data extends IpcData>(
       try {
         const pingChannel = getChannel("state-ping", channel);
         ipcMain.handle(pingChannel, async (event, token) => {
+          const subscriber = typeof token === "string" ? subscribers.get(token) : undefined;
+          const isOwner =
+            subscriber?.frame === event.senderFrame && subscriber?.sender === event.sender;
           try {
-            const subscriber = typeof token === "string" ? subscribers.get(token) : undefined;
-            if (
-              !subscriber ||
-              subscriber.frame !== event.senderFrame ||
-              subscriber.sender !== event.sender
-            )
-              throw new Error("IPC subscription disconnected");
+            if (!subscriber || !isOwner) throw new Error("IPC subscription disconnected");
             await authorizeRequest(options.authorize, event, "subscribe", {
               timeoutMs: options.timeoutMs,
             });
@@ -147,6 +144,7 @@ export async function createIpcState<Data extends IpcData>(
             subscriber.expires = Date.now() + leaseMs;
             return { ok: true, data: undefined };
           } catch (error) {
+            if (isOwner && subscribers.get(String(token)) === subscriber) subscriber?.cleanup();
             return errorResponse(error, options.includeErrorStack);
           }
         });

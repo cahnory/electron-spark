@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { app } from "electron";
+import { app, dialog } from "electron";
 
 import { IS_MAC_OS, MODE } from "./constants.ts";
 import { createRenderer } from "./core/windowManager.ts";
@@ -74,4 +74,14 @@ const bootstrap = async (): Promise<void> => {
 
 bootstrap().catch((error: unknown) => {
   console.error(error);
+  try {
+    dialog.showErrorBox(
+      "Unable to start",
+      `The application could not start.\n\n${error instanceof Error ? error.message : String(error)}\n\n` +
+        `If the error concerns settings, check file permissions or restore a valid backup of:\n${path.join(app.getPath("userData"), "settings.json")}\n\n` +
+        "To reset settings, move that file aside, then restart the application.",
+    );
+  } finally {
+    app.exit(1);
+  }
 });
