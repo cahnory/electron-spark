@@ -34,6 +34,19 @@ seule fois afin de suivre les imports et exports entre packages. Sa configuratio
 reconnaît les points d'entrée Electron, preload et routes TanStack ; les exports
 générés sont exclus des signalements d'exports inutilisés.
 
+La démo possède sa configuration `apps/demo/.oxlintrc.json`, qui étend les règles
+racine et charge `eslint-plugin-formatjs`, installé uniquement dans ses
+`devDependencies`. Les commandes racine `check:lint` et `fix:lint` découvrent
+automatiquement cette configuration ; ne pas leur passer `--config`, car cela
+désactiverait les configurations imbriquées. Les règles FormatJS vérifient les
+messages déclarés dans le code (placeholders, pluriels, espaces et offsets).
+`formatjs/enforce-id` exige un `defaultMessage` littéral et génère un ID avec
+`[sha512:contenthash:base64:6]`. L'extension Oxc applique cette correction à la
+sauvegarde, ou via `pnpm fix:lint`. Les catalogues anglais et français utilisent
+ces mêmes IDs ; les mettre à jour après une modification du texte source.
+Les tests vérifient les hashes du catalogue anglais, la présence des traductions
+et leur formatage. Le plugin ne vérifie pas directement les catalogues.
+
 Les types et tests utilisent le graphe de tâches de pnpm 12 : par défaut, chaque
 tâche attend la même tâche dans ses dépendances workspace. Les tâches prêtes
 s'exécutent en parallèle, avec des sorties regroupées par package. `--no-bail`

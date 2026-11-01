@@ -16,37 +16,49 @@ import { settings } from "../../preload";
 
 import * as styles from "./index.css";
 
-type Feature = {
+type FeatureCardProps = {
   name: string;
-  category: string;
-  description: string;
+  category: ReactNode;
+  description: ReactNode;
   href: string;
   icon: LucideIcon;
 };
 
-const features: Feature[] = [
-  {
-    name: "vanilla-extract",
-    category: "home.features.styling.category",
-    description: "home.features.styling.description",
-    href: "https://vanilla-extract.style/",
-    icon: Palette,
-  },
-  {
-    name: "TanStack Router",
-    category: "home.features.routing.category",
-    description: "home.features.routing.description",
-    href: "https://tanstack.com/router/latest",
-    icon: Signpost,
-  },
-  {
-    name: "React Intl",
-    category: "home.features.i18n.category",
-    description: "home.features.i18n.description",
-    href: "https://formatjs.github.io/docs/react-intl/",
-    icon: Languages,
-  },
-];
+const FeatureCard = ({
+  name,
+  category,
+  description,
+  href,
+  icon: Icon,
+}: FeatureCardProps): ReactNode => {
+  const intl = useIntl();
+
+  return (
+    <article className={styles.feature}>
+      <div className={styles.featureTop}>
+        <Icon size={22} aria-hidden />
+        <span className={styles.tag}>{category}</span>
+      </div>
+
+      <h3 className={styles.featureTitle}>{name}</h3>
+      <p className={styles.featureDescription}>{description}</p>
+
+      <a
+        className={styles.link}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={intl.formatMessage(
+          { defaultMessage: "Explore {name} documentation", id: "xj3azO" },
+          { name },
+        )}
+      >
+        <FormattedMessage defaultMessage="Explore the docs" id="6QQVXx" />
+        <ArrowUpRight size={16} aria-hidden />
+      </a>
+    </article>
+  );
+};
 
 const Index = (): ReactNode => {
   const intl = useIntl();
@@ -63,7 +75,7 @@ const Index = (): ReactNode => {
           <div className={styles.localeControl}>
             <select
               className={styles.localeSelect}
-              aria-label={intl.formatMessage({ id: "home.locale.label" })}
+              aria-label={intl.formatMessage({ defaultMessage: "Language", id: "y1Z3or" })}
               value={intl.locale}
               disabled={changingLocale}
               onChange={async (event) => {
@@ -89,7 +101,11 @@ const Index = (): ReactNode => {
             </select>
             {localeError && (
               <span className={styles.localeError} role="alert">
-                <FormattedMessage id="home.locale.error" />
+                <FormattedMessage
+                  defaultMessage="Unable to change language. Please try again."
+                  id="IBx7cd"
+                />
+                <FormattedMessage defaultMessage="hello world" id="MJ7MSJ" />
               </span>
             )}
           </div>
@@ -98,13 +114,21 @@ const Index = (): ReactNode => {
         <section className={styles.hero}>
           <div>
             <p className={styles.eyebrow}>
-              <FormattedMessage id="home.eyebrow" />
+              <FormattedMessage defaultMessage="Your next desktop app" id="5xWQHT" />
             </p>
             <h1 className={styles.title}>
-              <FormattedMessage id="home.title" values={{ br: () => <br /> }} />
+              <FormattedMessage
+                defaultMessage="A little setup.<br></br>A lot of possibility."
+                id="60/Im1"
+                values={{ br: () => <br /> }}
+              />
             </h1>
             <p className={styles.intro}>
-              <FormattedMessage id="home.intro" values={{ br: () => <br /> }} />
+              <FormattedMessage
+                defaultMessage="Your Electron app is up and running.<br></br>Make yourself at home. Then make it yours."
+                id="BBzRjg"
+                values={{ br: () => <br /> }}
+              />
             </p>
           </div>
 
@@ -117,11 +141,12 @@ const Index = (): ReactNode => {
           <FolderCode className={styles.startIcon} size={24} aria-hidden />
           <div>
             <h2 className={styles.startTitle}>
-              <FormattedMessage id="home.start.title" />
+              <FormattedMessage defaultMessage="Start making it yours" id="LvKKJd" />
             </h2>
             <p className={styles.startDescription}>
               <FormattedMessage
-                id="home.start.description"
+                defaultMessage="Edit <code>src/view</code> to change this screen."
+                id="HaVVfJ"
                 values={{ code: (chunks) => <code className={styles.code}>{chunks}</code> }}
               />
             </p>
@@ -130,42 +155,52 @@ const Index = (): ReactNode => {
 
         <section aria-labelledby="features-heading">
           <h2 id="features-heading" className={styles.sectionTitle}>
-            <FormattedMessage id="home.features.title" />
+            <FormattedMessage defaultMessage="Explore what’s inside" id="PGYFB3" />
           </h2>
 
           <div className={styles.features}>
-            {features.map(({ name, category, description, href, icon: Icon }) => (
-              <article key={name} className={styles.feature}>
-                <div className={styles.featureTop}>
-                  <Icon size={22} aria-hidden />
-                  <span className={styles.tag}>
-                    <FormattedMessage id={category} />
-                  </span>
-                </div>
-
-                <h3 className={styles.featureTitle}>{name}</h3>
-                <p className={styles.featureDescription}>
-                  <FormattedMessage id={description} />
-                </p>
-
-                <a
-                  className={styles.link}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={intl.formatMessage({ id: "home.docs.label" }, { name })}
-                >
-                  <FormattedMessage id="home.docs" />
-                  <ArrowUpRight size={16} aria-hidden />
-                </a>
-              </article>
-            ))}
+            <FeatureCard
+              name="vanilla-extract"
+              category={<FormattedMessage defaultMessage="Styling" id="kMsDUq" />}
+              description={
+                <FormattedMessage
+                  defaultMessage="Give your app its own style. Write your styles in TypeScript."
+                  id="KyJch2"
+                />
+              }
+              href="https://vanilla-extract.style/"
+              icon={Palette}
+            />
+            <FeatureCard
+              name="TanStack Router"
+              category={<FormattedMessage defaultMessage="Routing" id="kxSfEi" />}
+              description={
+                <FormattedMessage
+                  defaultMessage="Every screen has a place. Build your app’s navigation with TanStack."
+                  id="Eie3ps"
+                />
+              }
+              href="https://tanstack.com/router/latest"
+              icon={Signpost}
+            />
+            <FeatureCard
+              name="React Intl"
+              category={<FormattedMessage defaultMessage="Internationalization" id="/TKPkw" />}
+              description={
+                <FormattedMessage
+                  defaultMessage="Make your app feel at home in every language. Translate messages and format dates and numbers with React Intl."
+                  id="BqZd+l"
+                />
+              }
+              href="https://formatjs.github.io/docs/react-intl/"
+              icon={Languages}
+            />
           </div>
         </section>
 
         <footer className={styles.footer}>
           <span>
-            <FormattedMessage id="home.footer" />
+            <FormattedMessage defaultMessage="Your idea. Your desktop app." id="Tx3Y+K" />
           </span>
           <span>Electron / Vite / React</span>
         </footer>

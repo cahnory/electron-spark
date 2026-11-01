@@ -7,7 +7,7 @@ const rendererData = {
   "mode": "serve" as const,
   "renderers": {
     "view": {
-      "url": "http://localhost:5174/view/index.html",
+      "url": "http://localhost:5173/view/index.html",
       "window": {
         "title": "Electron + Vite + React",
         "webPreferences": {
