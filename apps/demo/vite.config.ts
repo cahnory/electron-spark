@@ -16,6 +16,16 @@ const RouteComponent = (): ReactNode => <div>Hello "%%tsrPath%%"</div>;
 export default defineElectronConfig({
   vite: {
     plugins: [
+      {
+        name: "development-content-security-policy",
+        apply: "serve",
+        transformIndexHtml(html) {
+          return html.replace(
+            /(<meta\b[^>]*http-equiv="Content-Security-Policy"[^>]*content=")[^"]*(")/i,
+            "$1default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws:; object-src 'none'; base-uri 'none'; form-action 'none';$2",
+          );
+        },
+      },
       reactPlugin(),
       vanillaExtractPlugin(),
       tanstackRouter({

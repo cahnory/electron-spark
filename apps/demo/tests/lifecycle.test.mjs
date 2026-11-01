@@ -3,6 +3,15 @@ import { EventEmitter } from "node:events";
 import { mock, test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 
+mock.module("../src/main/core/security.ts", { namedExports: { configureSessionPermissions() {} } });
+
+mock.module("../src/main/renderers.generated.ts", {
+  defaultExport: {
+    mode: "build",
+    renderers: { view: { path: "/test/view/index.html", window: {} } },
+  },
+});
+
 const windows = [];
 class BrowserWindow extends EventEmitter {
   destroyed = false;
@@ -33,7 +42,9 @@ const app = Object.assign(new EventEmitter(), {
   setAppUserModelId() {},
   getName: () => "demo",
 });
-mock.module("electron", { namedExports: { app, BrowserWindow, shell: {}, dialog: {} } });
+mock.module("electron", {
+  namedExports: { app, session: { defaultSession: {} }, BrowserWindow, shell: {}, dialog: {} },
+});
 const provided = [];
 mock.module("../src/main/settings.ts", {
   namedExports: { createSettings: async () => ({ provideTo: (window) => provided.push(window) }) },

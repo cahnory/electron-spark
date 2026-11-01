@@ -14,5 +14,13 @@
     "reportUnusedDisableDirectives": "error",
     "typeAware": true,
     "typeCheck": true
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/*.generated.ts"],
+      "rules": {
+        "typescript/no-unsafe-type-assertion": "off"
+      }
+    }
+  ]
 }

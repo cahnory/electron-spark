@@ -15,7 +15,9 @@
   "type": "module",
   "main": "dist/main/index.js",
   "scripts": {
-    "build": "pnpm vite build && electron-builder",
+    "build": "pnpm check && pnpm build:dist && electron-builder --publish never",
+    "build:dist": "vite build",
+    "build:local": "pnpm check && pnpm build:dist && electron-builder --config electron-builder.local.json --dir --publish never",
     "check": "concurrently --names format,lint,test,types --group \"pnpm check:format\" \"pnpm check:lint\" \"pnpm check:test\" \"pnpm check:types\"",
     "check:format": "oxfmt --check .",
     "check:lint": "oxlint --deny-warnings .",

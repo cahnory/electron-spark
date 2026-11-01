@@ -62,3 +62,87 @@ disponibles comme alias des nouveaux scripts.
 Les tests affichent un résumé par package en cas de succès et le rapport détaillé
 en cas d’échec. Pour une sortie détaillée à la demande, lancer Node avec
 `--test-reporter=spec` à la place du reporter partagé.
+
+## Builds et distributions sécurisées
+
+Depuis `apps/demo`, `pnpm build:dist` compile uniquement l'application. `pnpm build`
+exécute les contrôles, compile puis produit une distribution signée. Le packaging
+échoue sans signature ; sur macOS, les identifiants de notarisation sont également
+obligatoires et le ticket agrafé est vérifié après signature. Configurer les
+certificats de signature electron-builder via le trousseau ou `CSC_LINK` et
+`CSC_KEY_PASSWORD` (et les équivalents Windows si nécessaire). Ne jamais placer
+ces fichiers ou valeurs dans `src`, `public`, `resources` ou les artefacts.
+
+Pour développer une application utilisée uniquement en local, `pnpm build:local`
+produit l'application dépaquetée dans `release/local/<version>`, sans exiger de
+certificat de distribution ni de notarisation. Sur macOS, une signature ad hoc
+locale est appliquée pour permettre l'exécution, notamment sur Apple Silicon.
+Sous Windows, la signature est facultative et peut être appliquée si des
+identifiants sont déjà configurés. Les contrôles des fichiers, les fuses et les
+protections de production restent actifs. `pnpm build` conserve la signature
+obligatoire et les sorties de distribution séparées.
+
+Pour la notarisation macOS, fournir un des ensembles suivants :
+
+- `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` ;
+- `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` ;
+- `APPLE_KEYCHAIN_PROFILE` et éventuellement `APPLE_KEYCHAIN`.
+
+Le main et les preloads embarquent leurs dépendances dans leurs bundles. Le
+package exclut `node_modules`, les sources TypeScript et les source maps. Un hook
+inspecte aussi le contenu réel de `app.asar` et refuse les fichiers hors de
+`dist`, les extensions non prévues, les fichiers cachés, les fichiers de secrets
+identifiables et les fichiers dépaquetés. L'ajout de modules natifs ou de nouveaux
+types de ressources nécessite une adaptation explicite de cette politique, avec
+vérification de l'artefact final. La copie globale de `resources` est supprimée.
+
+La publication est désactivée (`publish: null` et `--publish never`). Avant
+l'ajout d'un updater ou d'une publication, définir explicitement l'identité de
+l'application, son dépôt et son fournisseur de mises à jour ; adapter également
+le hook qui refuse `app-update.yml`. Ne pas publier tout le dossier `release` :
+il peut contenir d'anciens artefacts et des fichiers de diagnostic. Distribuer
+uniquement les installateurs vérifiés du build concerné.
+
+Les fuses désactivent RunAsNode, les options Node par environnement et l'inspecteur
+Node ; ils activent le chiffrement des cookies et le chargement exclusif depuis
+un ASAR dont l'intégrité est validée. Utiliser `utilityProcess` plutôt que
+`child_process.fork` pour les futurs processus Node auxiliaires.
+
+Les builds de production refusent les options de fenêtre qui désactivent
+l'isolation, le sandbox ou la sécurité web, et celles qui activent Node dans les
+renderers ou des fonctionnalités expérimentales. La CSP de production ne permet
+pas les scripts/styles inline ; les exceptions nécessaires à Vite/React sont
+ajoutées uniquement par le serveur de développement. Ajouter explicitement les
+origines autorisées à `connect-src` si l'application utilise un service distant.
+
+Tout code distribué, y compris le main et les preloads, est lisible par
+l'utilisateur. ASAR et `.gitignore` ne protègent pas les secrets : aucun secret
+serveur ne doit être intégré au code, aux assets ou à `VITE_*`. Le contrôle des
+noms de fichiers ne remplace pas une revue de leur contenu. Conserver les secrets
+serveur côté serveur et les identifiants de release dans le gestionnaire de
+secrets du CI ; installer avec `pnpm install --frozen-lockfile` dans un checkout
+propre et maintenir Electron et les dépendances à jour.
+
+Les applications packagées ignorent `MODE=test`. Les sessions Electron refusent
+les permissions par défaut ; les exceptions se déclarent dans
+`configureSessionPermissions` avec une origine HTTP(S) exacte et les permissions
+nécessaires, uniquement pour la frame principale. Cette politique est installée
+avant la création des fenêtres, pour la session par défaut et les nouvelles sessions.
+
+Chaque renderer compilé reçoit une CSP restrictive si elle manque. Une CSP
+existante doit limiter les scripts à `self`, des hashes ou des nonces, interdire
+les objets et restreindre `base-uri`. Elle est réappliquée au début du head.
+Les ressources supplémentaires sont refusées sauf les fichiers Electron
+explicitement autorisés ; les répertoires de traduction macOS doivent être vides.
+
+Pour imposer l'identité du signataire, définir `EXPECTED_APPLE_TEAM_ID` (10 caractères)
+et/ou `EXPECTED_WINDOWS_PUBLISHER` (sujet exact du certificat Authenticode).
+Après création des artefacts, les signatures des DMG sont vérifiées ; pour les ZIP
+macOS, la signature et le ticket de notarisation de l'application extraite sont
+vérifiés ; les installateurs
+Windows doivent avoir une signature Authenticode valide. Les builds locaux
+conservent leur exemption de vérification des signatures de distribution.
+Les releases Windows doivent être construites sur Windows (poste ou runner CI),
+où PowerShell vérifie Authenticode. Un contrôle `beforePack` refuse les releases
+Windows depuis macOS ou Linux avant le packaging ; les builds locaux dépaquetés
+restent possibles avec `build:local`.

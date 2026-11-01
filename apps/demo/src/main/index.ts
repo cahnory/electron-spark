@@ -3,9 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { app, dialog } from "electron";
+import { app, dialog, session } from "electron";
 
 import { IS_MAC_OS, MODE } from "./constants.ts";
+import { configureSessionPermissions } from "./core/security.ts";
 import { createRenderer } from "./core/windowManager.ts";
 import data from "./renderers.generated.ts";
 import { createSettings } from "./settings.ts";
@@ -76,7 +77,9 @@ const bootstrap = async (): Promise<void> => {
     void initialized?.then(() => initializeMainProcess(settings)).catch(handleStartupError);
   });
 
+  app.on("session-created", configureSessionPermissions);
   await app.whenReady();
+  configureSessionPermissions(session.defaultSession);
   const settings = await createSettings();
   app.on("activate", () => {
     void initializeMainProcess(settings).catch(handleStartupError);

@@ -461,7 +461,7 @@ void test("resolves public HTML icons and window icon overrides", async (t) => {
   await writeFile(`${root}/panels/help/custom.ico`, "override icon");
   await writeFile(
     `${root}/panels/help/window.json`,
-    JSON.stringify({ icon: "custom.ico", title: "", webPreferences: { sandbox: false } }),
+    JSON.stringify({ icon: "custom.ico", title: "", webPreferences: { sandbox: true } }),
   );
   await (await createBuilder({ ...config, plugins: [electronRenderer(options)] })).buildApp();
   const result = await data(root);
@@ -471,7 +471,7 @@ void test("resolves public HTML icons and window icon overrides", async (t) => {
     "public icon",
   );
   assert.equal(result.renderers["panels/help"].window.title, "");
-  assert.deepEqual(result.renderers["panels/help"].window.webPreferences, { sandbox: false });
+  assert.deepEqual(result.renderers["panels/help"].window.webPreferences, { sandbox: true });
   assert.equal(
     await readFile(result.renderers["panels/help"].window.icon, "utf8"),
     "override icon",

@@ -5,6 +5,31 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/** Reject development exceptions before they become packaged window options. */
+export function validateProductionWindow(window: Record<string, unknown>, file: string): void {
+  const preferences = isRecord(window.webPreferences) ? window.webPreferences : {};
+  for (const key of ["contextIsolation", "sandbox", "webSecurity"]) {
+    if (preferences[key] !== undefined && preferences[key] !== true) {
+      throw new Error(`Production windows require ${key}: true (${file})`);
+    }
+  }
+  for (const key of [
+    "nodeIntegration",
+    "nodeIntegrationInWorker",
+    "nodeIntegrationInSubFrames",
+    "webviewTag",
+    "allowRunningInsecureContent",
+    "experimentalFeatures",
+  ]) {
+    if (preferences[key] !== undefined && preferences[key] !== false) {
+      throw new Error(`Production windows require ${key}: false (${file})`);
+    }
+  }
+  if (preferences.enableBlinkFeatures) {
+    throw new Error(`Production windows must not enable experimental Blink features (${file})`);
+  }
+}
+
 function readWindowOptions(file: string): Record<string, unknown> {
   if (!fs.existsSync(file)) return {};
   const value: unknown = JSON.parse(fs.readFileSync(file, "utf8"));

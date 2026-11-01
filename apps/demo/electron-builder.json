@@ -5,17 +5,13 @@
   "directories": {
     "output": "release/${version}"
   },
-  "files": ["dist", "dist/view"],
+  "files": ["dist/**/*", "!**/*.map", "!**/*.ts", "!**/.env*", "!node_modules/**/*"],
   "mac": {
     "artifactName": "${productName}_${version}.${ext}",
-    "target": ["dmg", "zip"]
+    "target": ["dmg", "zip"],
+    "notarize": true,
+    "hardenedRuntime": true
   },
-  "extraResources": [
-    {
-      "from": "resources",
-      "to": "appResources"
-    }
-  ],
   "win": {
     "target": [
       {
@@ -30,5 +26,22 @@
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
     "deleteAppDataOnUninstall": false
-  }
+  },
+  "forceCodeSigning": true,
+  "publish": null,
+  "beforePack": "./scripts/verify-build-host.mjs",
+  "afterPack": "./scripts/verify-package.mjs",
+  "afterSign": "./scripts/verify-signature.mjs",
+  "electronFuses": {
+    "runAsNode": false,
+    "enableNodeOptionsEnvironmentVariable": false,
+    "enableNodeCliInspectArguments": false,
+    "enableEmbeddedAsarIntegrityValidation": true,
+    "onlyLoadAppFromAsar": true,
+    "enableCookieEncryption": true
+  },
+  "dmg": {
+    "sign": true
+  },
+  "afterAllArtifactBuild": "./scripts/verify-artifacts.mjs"
 }

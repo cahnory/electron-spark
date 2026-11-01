@@ -5,8 +5,9 @@ import { waitForBuildOnServe } from "@electron-start/vite-plugin-build-on-serve"
 import { parse, type DefaultTreeAdapterMap } from "parse5";
 import { normalizePath, type Plugin, type ResolvedConfig, type ViteDevServer } from "vite";
 
+import { productionCsp } from "./csp.ts";
 import { discoverRendererHtml } from "./discover.ts";
-import { isRecord, readRendererWindow } from "./window.ts";
+import { isRecord, readRendererWindow, validateProductionWindow } from "./window.ts";
 
 export type ElectronRendererOptions = {
   /** View directory patterns relative to Vite's root; re-evaluate config when matches change. */
@@ -86,6 +87,7 @@ export const electronRenderer = (options: ElectronRendererOptions): Plugin => {
   ): { window: Record<string, unknown>; icon: string | undefined } => {
     const defaults = htmlMetadata(fs.readFileSync(html, "utf8"));
     const { window } = readRendererWindow(html, options.windowConfigPath);
+    if (!server) validateProductionWindow(window, windowFile(html));
     let icon: string | undefined;
     if (typeof window.icon === "string") {
       icon = path.resolve(path.dirname(html), window.icon);
@@ -340,6 +342,12 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
   return {
     name: "@electron-start/vite-plugin-electron-renderer",
     sharedDuringBuild: true,
+    transformIndexHtml: {
+      order: "post",
+      handler(html) {
+        return server ? undefined : productionCsp(html);
+      },
+    },
     config() {
       return { environments: { [electron]: { define: { VITE_DEV_SERVER_URL: "undefined" } } } };
     },

@@ -3,6 +3,15 @@ import { EventEmitter } from "node:events";
 import { mock, test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 
+mock.module("../src/main/core/security.ts", { namedExports: { configureSessionPermissions() {} } });
+
+mock.module("../src/main/renderers.generated.ts", {
+  defaultExport: {
+    mode: "build",
+    renderers: { view: { path: "/test/view/index.html", window: {} } },
+  },
+});
+
 const errors = [];
 const exits = [];
 let startupError;
@@ -17,6 +26,7 @@ const app = Object.assign(new EventEmitter(), {
 mock.module("electron", {
   namedExports: {
     app,
+    session: { defaultSession: {} },
     BrowserWindow: function () {
       assert.fail("Startup failure must not create a window");
     },

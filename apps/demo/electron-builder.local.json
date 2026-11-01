@@ -1,0 +1,13 @@
+{
+  "extends": "./electron-builder.json",
+  "directories": {
+    "output": "release/local/${version}"
+  },
+  "forceCodeSigning": false,
+  "mac": {
+    "identity": "-",
+    "notarize": false
+  },
+  "afterSign": null,
+  "afterAllArtifactBuild": null
+}

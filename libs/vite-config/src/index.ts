@@ -178,6 +178,7 @@ const makeConfig = (options: ElectronConfigOptions, context: ConfigEnv): UserCon
       electron: customize<ConfigEnv>(
         {
           consumer: "server",
+          resolve: { noExternal: true },
           input: mainEntry,
           build: {
             copyPublicDir: false,
