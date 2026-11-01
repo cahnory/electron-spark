@@ -70,9 +70,11 @@ const createServeSession = (server: ViteDevServer, name: string, options: BuildO
   let watcher: { close(): Promise<void> } | undefined;
   let starting: Promise<void> | undefined;
   let closing: Promise<void> | undefined;
+  const stopped = Promise.withResolvers<void>();
 
   function close() {
     httpServer.off("listening", start);
+    stopped.resolve();
     closing ??= (async () => {
       try {
         await resource?.close();
@@ -90,10 +92,16 @@ const createServeSession = (server: ViteDevServer, name: string, options: BuildO
       resource = options.session?.(server);
       const plugins =
         typeof options.plugins === "function" ? options.plugins(server) : options.plugins;
-      watcher = await startWatchedBuild(server, name, options, {
-        ...resource,
-        plugins: [...(plugins ?? []), ...(resource?.plugins ?? [])],
-      });
+      watcher = await startWatchedBuild(
+        server,
+        name,
+        options,
+        {
+          ...resource,
+          plugins: [...(plugins ?? []), ...(resource?.plugins ?? [])],
+        },
+        stopped.promise,
+      );
     })();
     void starting.catch(async (error: unknown) => {
       try {
@@ -115,8 +123,15 @@ const startWatchedBuild = async (
   environmentName: string,
   options: BuildOnServeOptions,
   session: Omit<BuildOnServeSession, "close">,
-): Promise<{ close(): Promise<void> }> => {
-  await Promise.all((server as CoordinatedServer)[prerequisitesKey]?.get(environmentName) ?? []);
+  stopped: Promise<void>,
+): Promise<{ close(): Promise<void> } | undefined> => {
+  const ready = await Promise.race([
+    Promise.all((server as CoordinatedServer)[prerequisitesKey]?.get(environmentName) ?? []).then(
+      () => true,
+    ),
+    stopped.then(() => false),
+  ]);
+  if (!ready) return undefined;
   // A dev server has no builder. Resolve a separate build config, preserving
   // both file-based configuration and overrides passed to createServer().
   const builder = await createBuilder(

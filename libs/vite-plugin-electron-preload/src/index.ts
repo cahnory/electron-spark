@@ -11,6 +11,16 @@ export function electronPreload(environmentName = "preload"): Plugin[] {
   return [
     electronPreloadExpose(environmentName),
     electronPreloadRenderer(environmentName),
-    buildOnServe(environmentName),
+    buildOnServe(environmentName, {
+      session(server) {
+        return {
+          buildSuccess() {
+            // The bridge lives in the preload context, so renderer HMR cannot replace it.
+            server.ws.send({ type: "full-reload" });
+          },
+          async close() {},
+        };
+      },
+    }),
   ];
 }

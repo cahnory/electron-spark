@@ -30,7 +30,10 @@ export function createIpcRendererServer<Actions extends IpcActions>(
   },
 ) {
   timeoutMs(options.timeoutMs);
-  const pending = new Map<string, { target: IpcRequestEvent; resolve: (value: unknown) => void }>();
+  const pending = new Map<
+    string,
+    { target: IpcRequestEvent; signal: AbortSignal; resolve: (value: unknown) => void }
+  >();
   let attached = false;
   let lifetime = new AbortController();
   return {
@@ -41,6 +44,7 @@ export function createIpcRendererServer<Actions extends IpcActions>(
         const call = typeof id === "string" ? pending.get(id) : undefined;
         if (
           !call ||
+          call.signal.aborted ||
           call.target.sender !== event.sender ||
           call.target.senderFrame !== event.senderFrame
         )
@@ -74,6 +78,7 @@ export function createIpcRendererServer<Actions extends IpcActions>(
         if (name === "then") throw new Error('IPC action name "then" is reserved');
         methods[name] = async (...args) => {
           assertIpcData(args);
+          const input = structuredClone(args);
           if (!attached || !owner.senderFrame) throw new Error("IPC renderer server unavailable");
           const controller = new AbortController();
           const signal = AbortSignal.any([
@@ -86,6 +91,9 @@ export function createIpcRendererServer<Actions extends IpcActions>(
             controller.abort(new Error("IPC target navigated")),
           );
           const id = requestId();
+          const stopRevocations = options.authorize.onRevoke?.((sender) => {
+            if (sender === owner.sender) controller.abort(new Error("IPC access revoked"));
+          });
           try {
             const work = async () => {
               const frame = await authorizeRequest(options.authorize, owner, name, {
@@ -94,9 +102,13 @@ export function createIpcRendererServer<Actions extends IpcActions>(
               });
               signal.throwIfAborted();
               return new Promise<unknown>((resolve, reject) => {
-                pending.set(id, { target: owner, resolve });
+                pending.set(id, { target: owner, signal, resolve });
                 try {
-                  frame.send(getChannel("renderer-call", channel), { id, action: name, args });
+                  frame.send(getChannel("renderer-call", channel), {
+                    id,
+                    action: name,
+                    args: input,
+                  });
                 } catch (error) {
                   reject(error);
                 }
@@ -116,6 +128,7 @@ export function createIpcRendererServer<Actions extends IpcActions>(
           } finally {
             controller.abort(new Error("IPC renderer request finished"));
             pending.delete(id);
+            stopRevocations?.();
             stop();
           }
         };

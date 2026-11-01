@@ -429,6 +429,16 @@ void test("state removes subscriptions when a frame navigates to another URL", a
   const bridge = createIpcStateBridge(t.renderer, "navigation");
   await bridge.ready();
   t.frame.url = "https://untrusted.example/";
+  t.sender.emit(
+    "did-frame-navigate",
+    {},
+    t.frame.url,
+    200,
+    "OK",
+    true,
+    t.frame.processId,
+    t.frame.routingId,
+  );
   await state.setState(1);
   assert.throws(() => bridge.getState(), /disconnected/);
   assert.equal(t.sender.listenerCount("destroyed"), 0);
@@ -590,6 +600,8 @@ void test("document navigation cleans only the affected frame and its descendant
     frame.send = (channel, value) => {
       if (channel === getChannel("state", "frames")) sent.push(value.token);
     };
+  child.url += "?tab=settings#/profile";
+  await new Promise((resolve) => setTimeout(resolve, 1100));
   // Same-document events do not retire the current document's subscriptions.
   t.sender.emit("did-start-navigation", { frame: child, isMainFrame: false, isSameDocument: true });
   assert.equal(t.sender.listenerCount("destroyed"), 1);
@@ -600,7 +612,10 @@ void test("document navigation cleans only the affected frame and its descendant
     isSameDocument: false,
   });
   await state.setState(1);
-  assert.deepEqual(sent, ["main", "child", "grandchild"]);
+  assert.deepEqual(
+    sent.toSorted((a, b) => a.localeCompare(b)),
+    ["child", "grandchild", "main"],
+  );
   sent.length = 0;
   // URL stays identical, as it does on reload.
   t.sender.emit(
@@ -1347,4 +1362,159 @@ void test("revocation aborts a running API command and detachment removes policy
     detach();
   }
   assert.equal(t.sender.listenerCount("did-frame-navigate"), 0);
+});
+
+void test("revocation cancels event validation and pending reverse replies", async () => {
+  const t = transport();
+  t.sender.mainFrame = t.frame;
+  const policy = createIpcAccessPolicy();
+  let revoke = policy.grant(t.sender, new URL(t.frame.url));
+  let finish;
+  const delayed = {
+    "~standard": {
+      version: 1,
+      vendor: "test",
+      validate: () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    },
+  };
+  const sent = [];
+  t.frame.send = (...args) => sent.push(args);
+  const sending = createIpcEventSender("revocation", delayed, { authorize: policy.authorize }).send(
+    t.event,
+    1,
+  );
+  const rejected = assert.rejects(sending, /access revoked/);
+  await tick();
+  revoke();
+  await rejected;
+  finish({ value: 1 });
+  await tick();
+  assert.deepEqual(sent, []);
+  revoke = policy.grant(t.sender, new URL(t.frame.url));
+  const server = createIpcRendererServer(
+    "revocation",
+    { read: true },
+    { authorize: policy.authorize, results: { read: number } },
+  );
+  const detach = server.attach(t.main);
+  const pending = server.client(t.event).read();
+  const cancelled = assert.rejects(pending, /access revoked/);
+  await tick();
+  const id = sent[0][1].id;
+  revoke();
+  const reply = await t.renderer.invoke(getChannel("renderer-reply", "revocation"), id, {
+    ok: true,
+    data: 1,
+  });
+  assert.equal(reply.ok, false);
+  await cancelled;
+  detach();
+  assert.equal(t.sender.listenerCount("did-frame-navigate"), 0);
+});
+
+for (const allowed of [false, true]) {
+  void test(`same-document publication rechecks URL policy (allowed=${allowed})`, async () => {
+    const t = transport();
+    t.sender.mainFrame = t.frame;
+    const access = createIpcAccessPolicy({ ignoreSearch: allowed, ignoreHash: allowed });
+    const revoke = access.grant(t.sender, new URL(t.frame.url));
+    const state = await createIpcState("route-policy", {
+      initialState: 0,
+      schema: number,
+      authorize: access.authorize,
+    });
+    const detach = state.attach(t.main);
+    const bridge = createIpcStateBridge(t.renderer, "route-policy");
+    try {
+      await bridge.ready();
+      t.frame.url += "?tab=private#/settings";
+      await state.setState(1);
+      if (allowed) assert.equal(bridge.getState(), 1);
+      else assert.throws(() => bridge.getState(), /disconnected/);
+    } finally {
+      await bridge.dispose();
+      detach();
+      revoke();
+    }
+  });
+}
+
+void test("status callbacks can join initialization without creating another registration", async () => {
+  const t = transport();
+  let checks = 0;
+  const state = await createIpcState("reentrant-ready", {
+    initialState: 1,
+    schema: number,
+    authorize: () => {
+      checks++;
+      return true;
+    },
+  });
+  const detach = state.attach(t.main);
+  const bridge = createIpcStateBridge(t.renderer, "reentrant-ready");
+  const nested = [];
+  const stop = bridge.subscribeStatus((status) => {
+    if (status === "connecting" && !nested.length) nested.push(bridge.ready());
+  });
+  try {
+    const initial = bridge.ready();
+    assert.equal(await initial, 1);
+    assert.equal(nested.length, 1);
+    assert.equal(await nested[0], 1);
+    assert.equal(checks, 1);
+  } finally {
+    stop();
+    await bridge.dispose();
+    detach();
+  }
+});
+
+void test("disposal in a connected callback cancels readiness without stale status delivery", async () => {
+  const t = transport();
+  const state = await createIpcState("status-disposal", {
+    initialState: 1,
+    schema: number,
+    authorize,
+  });
+  const detach = state.attach(t.main);
+  const bridge = createIpcStateBridge(t.renderer, "status-disposal");
+  bridge.subscribeStatus((status) => {
+    if (status === "connected") void bridge.dispose();
+  });
+  const statuses = [];
+  bridge.subscribeStatus((status) => statuses.push(status));
+  try {
+    await assert.rejects(bridge.ready(), /disposed/);
+    assert.deepEqual(statuses, ["idle", "connecting", "disposed"]);
+  } finally {
+    await bridge.dispose();
+    detach();
+  }
+});
+
+void test("reverse RPC captures arguments before asynchronous authorization", async () => {
+  const t = transport();
+  const gate = Promise.withResolvers();
+  const server = createIpcRendererServer(
+    "owned-args",
+    { echo: true },
+    { authorize: () => gate.promise, results: { echo: anyData } },
+  );
+  const detach = server.attach(t.main);
+  const stop = createIpcRendererBridge(t.renderer, "owned-args", {
+    echo: defineIpcAction({ params: anyData, handler: (value) => value }),
+  });
+  try {
+    const input = { value: 1 };
+    const pending = server.client(t.event).echo(input);
+    input.value = 2;
+    gate.resolve(true);
+    assert.deepEqual(await pending, { value: 1 });
+  } finally {
+    stop();
+    detach();
+  }
 });

@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import { createServer as createViteServer, createLogger, DevEnvironment } from "vite";
 
-import { buildOnServe } from "../src/index.ts";
+import { buildOnServe, waitForBuildOnServe } from "../src/index.ts";
 
 // Exercise the standalone HTTP lifecycle without opening a network port.
 // Vite itself calls the environment listeners before the HTTP listening event.
@@ -278,6 +278,63 @@ void test("a session setup failure is logged and closes its resources exactly on
     await server.close();
     assert.equal(closed, 1);
   } finally {
+    await server?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+void test("shutdown cancels unresolved build prerequisites", { timeout: 5000 }, async () => {
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), "vite-prerequisite-close-")));
+  const prerequisite = Promise.withResolvers();
+  let server;
+  let builds = 0;
+  let closed = 0;
+  try {
+    await writeFile(path.join(root, "main.js"), "console.log('main');");
+    server = await createServer({
+      configFile: false,
+      root,
+      logLevel: "silent",
+      environments: {
+        main: {
+          consumer: "server",
+          input: "main.js",
+          build: { ssr: true, outDir: path.join(root, "dist") },
+        },
+      },
+      plugins: [
+        {
+          name: "unresolved-prerequisite",
+          configureServer(candidate) {
+            waitForBuildOnServe(candidate, "main", prerequisite.promise);
+          },
+        },
+        buildOnServe("main", {
+          session() {
+            return {
+              async close() {
+                closed++;
+              },
+            };
+          },
+          plugins: [
+            {
+              name: "probe",
+              buildStart() {
+                builds++;
+              },
+            },
+          ],
+        }),
+      ],
+    });
+    await server.close();
+    prerequisite.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(builds, 0);
+    assert.equal(closed, 1);
+  } finally {
+    prerequisite.resolve();
     await server?.close();
     await rm(root, { recursive: true, force: true });
   }

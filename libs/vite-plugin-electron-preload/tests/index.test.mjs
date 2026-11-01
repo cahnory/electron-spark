@@ -172,3 +172,49 @@ void test("each preload environment exposes its own entry under a distinct key",
     assert.equal(view[EXPOSED_PRELOADS_KEY]["preload.ts"], undefined);
   });
 });
+
+void test(
+  "successful preload rebuilds reload renderers after writing the new bridge",
+  { timeout: 10000 },
+  async () => {
+    await fixture(async (root) => {
+      const options = config(root);
+      options.environments.preload.build.write = true;
+      options.environments.preload.build.outDir = path.join(root, "dist");
+      const reloads = [];
+      let written = 0;
+      options.plugins.push({
+        name: "observe-preload-output",
+        writeBundle() {
+          written++;
+        },
+        configureServer(server) {
+          server.ws.send = (message) => {
+            if (message.type === "full-reload") reloads.push(written);
+          };
+        },
+      });
+      const server = await createServer({ ...options, server: { ws: false } });
+      server.httpServer.address = () => ({ port: 4321, address: "127.0.0.1", family: "IPv4" });
+      try {
+        // Exercise the listening lifecycle without opening a port.
+        await Promise.all(
+          Object.values(server.environments).map((environment) => environment.listen(server)),
+        );
+        server.httpServer.emit("listening");
+        await waitFor(() => reloads.includes(1));
+        await writeFile(path.join(root, "shared.ts"), "export const shared = 'updated';");
+        await waitFor(() => reloads.includes(2));
+      } finally {
+        await server.close();
+      }
+    });
+  },
+);
+
+async function waitFor(check, remaining = 100) {
+  if (check()) return;
+  if (!remaining) assert.fail("preload rebuild did not reload renderers");
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  return waitFor(check, remaining - 1);
+}

@@ -15,8 +15,11 @@ class BrowserWindow extends EventEmitter {
   isDestroyed() {
     return this.destroyed;
   }
+  restore() {
+    this.minimized = false;
+  }
   isMinimized() {
-    return false;
+    return this.minimized;
   }
   focus() {
     this.focused = true;
@@ -48,6 +51,18 @@ void test("activation reopens a closed window and grants settings access", async
   app.emit("activate");
   assert.equal(windows.length, 2);
   assert.equal(provided.length, 2);
+  await setImmediate();
   assert.ok(windows[1].focused);
   assert.ok(provided.includes(windows[1]));
+});
+
+void test("second instance restores and focuses the existing window", async () => {
+  const window = windows.at(-1);
+  window.minimized = true;
+  window.focused = false;
+  app.emit("second-instance");
+  await setImmediate();
+  assert.equal(window.minimized, false);
+  assert.equal(window.focused, true);
+  assert.equal(windows.length, 2);
 });

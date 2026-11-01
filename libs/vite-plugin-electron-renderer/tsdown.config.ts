@@ -7,6 +7,7 @@ export default defineConfig({
   },
   exports: {
     devExports: true,
+    customExports: { "./window.schema.json": "./window.schema.json" },
   },
   format: ["cjs", "esm"],
   platform: "neutral",

@@ -155,8 +155,8 @@ The backing schema validates all state; the selector's output must be `IpcData`.
 Declare the state bridge with the projected type. Selectors run for initial
 snapshots and each commit; thrown projections disconnect only that subscriber.
 Keep permission-sensitive filtering in the selector. Subscription authorization
-runs at initialization and on heartbeat; it is not a fresh authorization on every
-state update. Store window-specific data in a main-owned map/object and derive the
+runs at initialization, on heartbeat, and before publishing after a same-document
+URL change; it is not a fresh authorization on every state update. Store window-specific data in a main-owned map/object and derive the
 key from context, never from an unchecked renderer-supplied window ID.
 
 Connection status is `idle`, `connecting`, `connected`, `disconnected`, or

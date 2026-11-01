@@ -62,7 +62,10 @@ export function createIpcStateBridge<Data extends IpcData>(
     status = next;
     // Snapshot listeners: callbacks may add listeners during delivery.
     // oxlint-disable-next-line unicorn/no-useless-spread
-    for (const callback of [...statusSubscribers]) safely(() => callback(next));
+    for (const callback of [...statusSubscribers]) {
+      if (status !== next) break;
+      if (statusSubscribers.has(callback)) safely(() => callback(next));
+    }
   };
   const release = (id: string) => {
     void ipcRenderer.invoke(getChannel("state-unsubscribe", channel), id).catch(() => {});
@@ -136,8 +139,7 @@ export function createIpcStateBridge<Data extends IpcData>(
     current = undefined;
     const attempt = new AbortController();
     controller = attempt;
-    setStatus("connecting");
-    initialization = Promise.resolve()
+    const pending = Promise.resolve()
       .then(async () => {
         attempt.signal.throwIfAborted();
         const work = ipcRenderer.invoke(getChannel("state-subscribe", channel), id);
@@ -153,6 +155,7 @@ export function createIpcStateBridge<Data extends IpcData>(
         accept(readResponse(response));
         attempt.signal.throwIfAborted();
         setStatus("connected");
+        attempt.signal.throwIfAborted();
         if (token === id) scheduleHeartbeat(id);
         return structuredClone(current!.data);
       })
@@ -160,7 +163,9 @@ export function createIpcStateBridge<Data extends IpcData>(
         if (token === id) disconnect(error);
         throw error;
       });
-    return initialization;
+    initialization = pending;
+    setStatus("connecting");
+    return pending;
   };
   return {
     ready,

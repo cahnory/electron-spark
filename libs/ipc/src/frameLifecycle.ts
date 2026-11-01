@@ -1,12 +1,14 @@
 import type { Cleanup, IpcFrame, IpcNavigationListener, IpcSender } from "./transport.ts";
 
-type Watcher = { frame: IpcFrame; url: string; invalidate: Cleanup };
+// URL changes alone do not identify a new document (hash routing and history APIs).
+// Committed cross-document navigation is handled by did-frame-navigate below.
+type Watcher = { frame: IpcFrame; invalidate: Cleanup };
 type Owner = { watchers: Set<Watcher>; stop: Cleanup };
 const owners = new WeakMap<IpcSender, Owner>();
 
 function isExpired(sender: IpcSender, watcher: Watcher): boolean {
   try {
-    return sender.isDestroyed() || watcher.frame.isDestroyed() || watcher.frame.url !== watcher.url;
+    return sender.isDestroyed() || watcher.frame.isDestroyed();
   } catch {
     return true;
   }
@@ -83,7 +85,6 @@ export function watchIpcFrame(sender: IpcSender, frame: IpcFrame, onInvalidated:
   };
   const watcher: Watcher = {
     frame,
-    url: frame.url,
     invalidate: () => {
       unwatch();
       onInvalidated();

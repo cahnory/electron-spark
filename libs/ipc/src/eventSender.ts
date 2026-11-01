@@ -24,6 +24,9 @@ export function createIpcEventSender<Data extends IpcData>(
       const stop = watchIpcFrame(owner.sender, owner.senderFrame, () =>
         controller.abort(new Error("IPC target navigated")),
       );
+      const stopRevocations = options.authorize.onRevoke?.((sender) => {
+        if (sender === owner.sender) controller.abort(new Error("IPC access revoked"));
+      });
       try {
         await bounded(
           (async () => {
@@ -40,6 +43,7 @@ export function createIpcEventSender<Data extends IpcData>(
         );
       } finally {
         controller.abort();
+        stopRevocations?.();
         stop();
       }
     },

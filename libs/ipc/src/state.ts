@@ -48,7 +48,7 @@ export async function createIpcState<Data extends IpcData>(
   let revision = 0;
   let queue: Promise<unknown> = Promise.resolve();
   const attachments = new Map<IpcMainTransport, () => void>();
-  const publishers = new Set<(snapshot: IpcStateSnapshot<Data>) => void>();
+  const publishers = new Set<(snapshot: IpcStateSnapshot<Data>) => Promise<void>>();
   const snapshot = (): IpcStateSnapshot<Data> => ({ revision, data: structuredClone(data) });
   const project = (
     current: IpcStateSnapshot<Data>,
@@ -86,7 +86,7 @@ export async function createIpcState<Data extends IpcData>(
         if (storage) await storage.write(structuredClone(prepared));
         data = prepared;
         revision += 1;
-        for (const publish of publishers) publish(snapshot());
+        await Promise.all([...publishers].map((publish) => publish(snapshot())));
       });
       queue = commit.catch(() => {});
       return commit;
@@ -97,7 +97,14 @@ export async function createIpcState<Data extends IpcData>(
       let active = true;
       const subscribers = new Map<
         string,
-        { frame: IpcFrame; sender: IpcSender; url: string; expires: number; cleanup: () => void }
+        {
+          frame: IpcFrame;
+          sender: IpcSender;
+          url: string;
+          controller: AbortController;
+          expires: number;
+          cleanup: () => void;
+        }
       >();
       const pending = new Map<
         string,
@@ -107,18 +114,49 @@ export async function createIpcState<Data extends IpcData>(
       const unsubscribeChannel = getChannel("state-unsubscribe", channel);
       const updateChannel = getChannel("state", channel);
       const registered: string[] = [];
-      const publish = (current: IpcStateSnapshot<Data>) => {
+      const publish = async (current: IpcStateSnapshot<Data>) => {
+        const checks: Promise<void>[] = [];
         for (const [token, subscriber] of subscribers) {
           try {
-            if (subscriber.frame.isDestroyed() || subscriber.frame.url !== subscriber.url) {
+            if (subscriber.sender.isDestroyed() || subscriber.frame.isDestroyed()) {
               subscriber.cleanup();
               continue;
             }
-            subscriber.frame.send(updateChannel, { token, ...project(current, subscriber) });
+            if (subscriber.frame.url !== subscriber.url) {
+              const url = subscriber.frame.url;
+              checks.push(
+                (async () => {
+                  try {
+                    await authorizeRequest(
+                      options.authorize,
+                      { sender: subscriber.sender, senderFrame: subscriber.frame },
+                      "subscribe",
+                      {
+                        timeoutMs: options.timeoutMs,
+                        signal: subscriber.controller.signal,
+                      },
+                    );
+                    subscriber.controller.signal.throwIfAborted();
+                    if (subscriber.frame.url !== url)
+                      throw new Error("IPC sender changed during publication");
+                    subscriber.url = url;
+                    subscriber.frame.send(updateChannel, {
+                      token,
+                      ...project(current, subscriber),
+                    });
+                  } catch {
+                    subscriber.cleanup();
+                  }
+                })(),
+              );
+            } else {
+              subscriber.frame.send(updateChannel, { token, ...project(current, subscriber) });
+            }
           } catch {
             subscriber.cleanup();
           }
         }
+        await Promise.all(checks);
       };
       const leaseTimer = setInterval(
         () => {
@@ -174,6 +212,7 @@ export async function createIpcState<Data extends IpcData>(
             let stopWatching: () => void;
             const cleanup = () => {
               if (!subscribers.delete(token)) return;
+              controller.abort(new Error("IPC subscription disconnected"));
               try {
                 frame.send(getChannel("state-status", channel), { token, status: "disconnected" });
               } catch {
@@ -186,6 +225,7 @@ export async function createIpcState<Data extends IpcData>(
               frame,
               sender: event.sender,
               url: frame.url,
+              controller,
               expires: Date.now() + leaseMs,
               cleanup,
             });

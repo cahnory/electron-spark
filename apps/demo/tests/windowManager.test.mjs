@@ -4,22 +4,30 @@ import { mock, test } from "node:test";
 import { pathToFileURL } from "node:url";
 
 const opened = [];
+let loadError;
+let lastWindow;
 
 class BrowserWindow extends EventEmitter {
   webContents = new EventEmitter();
 
   constructor() {
     super();
+    lastWindow = this;
     this.webContents.setWindowOpenHandler = (handler) => {
       this.openWindow = handler;
     };
   }
 
   isDestroyed() {
-    return false;
+    return this.destroyed ?? false;
+  }
+
+  destroy() {
+    this.destroyed = true;
   }
 
   async loadURL(url) {
+    if (loadError) throw loadError;
     assert.equal(this.webContents.listenerCount("will-navigate"), 1);
     assert.equal(this.webContents.listenerCount("will-redirect"), 1);
     assert.equal(typeof this.openWindow, "function");
@@ -97,4 +105,27 @@ for (const mode of ["serve", "build"]) {
       }
     });
   }
+}
+
+for (const mode of ["serve", "build"]) {
+  void test(`${mode}: load failures reject readiness and retire the failed window`, async () => {
+    const manager = createRenderer({
+      mode,
+      renderers: {
+        view: { url: "http://localhost:5173/", path: "/missing/index.html", window: {} },
+      },
+    }).create("view");
+    loadError = new Error("Renderer unavailable");
+    try {
+      manager.create();
+      await assert.rejects(manager.ready(), /Renderer unavailable/);
+      assert.equal(lastWindow.destroyed, true);
+      assert.equal(manager.has(), false);
+    } finally {
+      loadError = undefined;
+    }
+    manager.create();
+    await manager.ready();
+    assert.equal(manager.has(), true);
+  });
 }

@@ -46,6 +46,7 @@ export const createRenderer = <const K extends string>(options: RendererSettings
 const createWindowManager = (options: RendererOptions) => {
   const rendererUrl = options.mode === "serve" ? new URL(options.url) : pathToFileURL(options.path);
   let win: BrowserWindow | undefined;
+  let loading: Promise<void> = Promise.resolve();
 
   const has = () => !!win && !win.isDestroyed();
   const get = () => (has() ? win : undefined);
@@ -75,15 +76,15 @@ const createWindowManager = (options: RendererOptions) => {
 
     setNavigationPolicy(windowInstance, rendererUrl, options.externalLinks ?? "open");
 
-    if (options.mode === "serve") {
-      void windowInstance.loadURL(options.url);
-    } else {
-      void windowInstance.loadFile(options.path);
-    }
-
-    if (win.isDestroyed()) {
-      throw new Error("window destroyed immediatly");
-    }
+    loading = (
+      options.mode === "serve"
+        ? windowInstance.loadURL(options.url)
+        : windowInstance.loadFile(options.path)
+    ).catch((error: unknown) => {
+      if (!windowInstance.isDestroyed()) windowInstance.destroy();
+      if (win === windowInstance) win = undefined;
+      throw error;
+    });
 
     return win;
   };
@@ -101,6 +102,7 @@ const createWindowManager = (options: RendererOptions) => {
   };
 
   return {
+    ready: () => loading,
     has,
     focus,
     get,

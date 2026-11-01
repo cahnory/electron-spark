@@ -45,7 +45,9 @@ const registerAppLifecycle = (): void => {
   });
 };
 
-const initializeMainProcess = (settings: Awaited<ReturnType<typeof createSettings>>): void => {
+const initializeMainProcess = async (
+  settings: Awaited<ReturnType<typeof createSettings>>,
+): Promise<void> => {
   // startUpdater();
   if (!mainWindow.has()) {
     const window = mainWindow.create();
@@ -55,6 +57,7 @@ const initializeMainProcess = (settings: Awaited<ReturnType<typeof createSetting
         : pathToFileURL(data.renderers.view.path);
     settings.provideTo(window, documentUrl);
   }
+  await mainWindow.ready();
   mainWindow.focus();
 };
 
@@ -68,13 +71,21 @@ const bootstrap = async (): Promise<void> => {
   configureUserDataPath();
   registerAppLifecycle();
 
+  let initialized: Promise<void> | undefined;
+  app.on("second-instance", () => {
+    void initialized?.then(() => initializeMainProcess(settings)).catch(handleStartupError);
+  });
+
   await app.whenReady();
   const settings = await createSettings();
-  app.on("activate", () => initializeMainProcess(settings));
-  initializeMainProcess(settings);
+  app.on("activate", () => {
+    void initializeMainProcess(settings).catch(handleStartupError);
+  });
+  initialized = initializeMainProcess(settings);
+  await initialized;
 };
 
-bootstrap().catch((error: unknown) => {
+const handleStartupError = (error: unknown): void => {
   console.error(error);
   try {
     dialog.showErrorBox(
@@ -86,4 +97,6 @@ bootstrap().catch((error: unknown) => {
   } finally {
     app.exit(1);
   }
-});
+};
+
+void bootstrap().catch(handleStartupError);

@@ -13,7 +13,11 @@ import { electronRenderer, readRendererWindow } from "../src/index.ts";
 
 async function fixture(t) {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "renderer-metadata-")));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  const cleanups = [];
+  t.after(async () => {
+    await Promise.all(cleanups.map((cleanup) => cleanup()));
+    await rm(root, { recursive: true, force: true });
+  });
   await mkdir(`${root}/screens/settings`, { recursive: true });
   await mkdir(`${root}/panels/help`, { recursive: true });
   await writeFile(`${root}/panels/help/page.html`, "<html>Help</html>");
@@ -32,6 +36,7 @@ async function fixture(t) {
     rendererManifestPath: "generated/renderer.ts",
   };
   return {
+    closeBeforeCleanup: (cleanup) => cleanups.push(cleanup),
     root,
     options,
     config: {
@@ -155,7 +160,7 @@ void test("build collects emitted filenames before compiling main and discovers 
 
 for (const fromFile of [false, true])
   void test(`serve preserves metadata across watched builds (${fromFile ? "config file" : "inline"})`, async (t) => {
-    const { root, options, config } = await fixture(t);
+    const { closeBeforeCleanup, root, options, config } = await fixture(t);
     const plugins = [electronRenderer(options), buildOnServe("preload"), buildOnServe("electron")];
     if (fromFile) {
       await writeFile(
@@ -172,7 +177,7 @@ for (const fromFile of [false, true])
         ? { configFile: `${root}/vite.config.mjs`, server: { ws: false } }
         : { ...config, server: { ws: false }, plugins },
     );
-    t.after(() => server.close());
+    closeBeforeCleanup(() => server.close());
     // Exercise the HTTP lifecycle without binding a sandboxed network port.
     server.resolvedUrls = { local: ["http://localhost:4321/app/"], network: [] };
     await Promise.all(
@@ -540,7 +545,7 @@ void test("validates declared preload sources and requires a matching environmen
 
 for (const change of ["add", "change", "remove"]) {
   void test(`restarts Vite when a preload declaration changes (${change})`, async (t) => {
-    const { root, options, config } = await fixture(t);
+    const { closeBeforeCleanup, root, options, config } = await fixture(t);
     const file = `${root}/screens/settings/window.json`;
     if (change === "add") await rm(file);
     await writeFile(`${root}/screens/settings/other.js`, 'console.log("other")');
@@ -549,7 +554,7 @@ for (const change of ["add", "change", "remove"]) {
       server: { ws: false },
       plugins: [electronRenderer(options)],
     });
-    t.after(() => server.close());
+    closeBeforeCleanup(() => server.close());
     let restarts = 0;
     server.restart = async () => {
       restarts++;
