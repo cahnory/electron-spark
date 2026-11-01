@@ -182,6 +182,16 @@ importers:
         specifier: ^7.1.0-beta
         version: 7.1.0-dev.20261025.1
 
+  libs/ipc:
+    dependencies:
+      '@standard-schema/spec':
+        specifier: ^1.1.0
+        version: 1.1.0
+    devDependencies:
+      tsdown:
+        specifier: ^0.23.2
+        version: 0.23.2(typescript@7.1.0-dev.20261025.1)
+
   libs/store:
     devDependencies:
       '@standard-schema/spec':

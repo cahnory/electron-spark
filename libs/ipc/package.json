@@ -1,0 +1,58 @@
+{
+  "name": "@electron-start/ipc",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": {
+    "name": "François Germain (Cahnory)",
+    "email": "cahnory@gmail.com",
+    "url": "https://github.com/cahnory"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cahnory/physicall.git",
+    "directory": "libs/ipc"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./main": "./src/main.ts",
+    "./renderer": "./src/renderer.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "require": "./dist/index.cjs"
+      },
+      "./main": {
+        "import": "./dist/main.js",
+        "require": "./dist/main.cjs"
+      },
+      "./renderer": {
+        "import": "./dist/renderer.js",
+        "require": "./dist/renderer.cjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit"
+  },
+  "dependencies": {
+    "@standard-schema/spec": "^1.1.0"
+  },
+  "devDependencies": {
+    "tsdown": "^0.23.2"
+  }
+}
