@@ -1,6 +1,6 @@
 # Publishing packages
 
-The root workspace and demo are private. The eight packages in `libs/` are
+The root workspace and demo are private. The ten packages in `libs/` are
 public npm packages. `pnpm build` builds the libraries; it does not package or
 sign the demo application.
 

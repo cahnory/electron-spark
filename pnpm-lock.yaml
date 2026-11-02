@@ -224,9 +224,15 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      '@electron-spark/electron-builder-verification':
+        specifier: workspace:*
+        version: link:../../libs/electron-builder-verification
       '@electron-spark/vite-config':
         specifier: workspace:*
         version: link:../../libs/vite-config
+      '@electron-spark/vite-plugin-electron-app-identity':
+        specifier: workspace:*
+        version: link:../../libs/vite-plugin-electron-app-identity
       '@tanstack/router-plugin':
         specifier: ^1.168.48
         version: 1.168.48(@tanstack/react-router@1.170.46(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(esbuild@0.28.2)(rolldown@1.2.15)(supports-color@10.2.2)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -254,6 +260,15 @@ importers:
       vite:
         specifier: ^8.3.5
         version: 8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+
+  libs/electron-builder-verification:
+    devDependencies:
+      electron-builder:
+        specifier: ^26.18.0
+        version: 26.18.0(electron-builder-squirrel-windows@26.18.0)(supports-color@10.2.2)
+      tsdown:
+        specifier: ^0.23.2
+        version: 0.23.2(oxc-resolver@11.24.2)(typescript@7.1.0-dev.20261025.1)
 
   libs/electron-spark: {}
 
@@ -303,6 +318,18 @@ importers:
 
   libs/vite-plugin-build-on-serve:
     devDependencies:
+      tsdown:
+        specifier: ^0.23.2
+        version: 0.23.2(oxc-resolver@11.24.2)(typescript@7.1.0-dev.20261025.1)
+      vite:
+        specifier: ^8.3.5
+        version: 8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+
+  libs/vite-plugin-electron-app-identity:
+    devDependencies:
+      electron:
+        specifier: ^45.0.0
+        version: 45.0.0(supports-color@10.2.2)
       tsdown:
         specifier: ^0.23.2
         version: 0.23.2(oxc-resolver@11.24.2)(typescript@7.1.0-dev.20261025.1)

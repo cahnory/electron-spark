@@ -3,7 +3,13 @@ import { test } from "node:test";
 
 import type { AfterPackContext } from "electron-builder";
 
-import { verifyEntries, requireNotarizationCredentials } from "../scripts/verify-package.ts";
+import {
+  verifyEntries as verifyPolicyEntries,
+  requireNotarizationCredentials,
+} from "../src/verify-package.ts";
+
+const verifyEntries = (entries: string[]) =>
+  verifyPolicyEntries(entries, { requiredEntries: ["dist/main/index.js", "dist/view/index.html"] });
 
 const required = ["package.json", "dist/main/index.js", "dist/view/index.html"];
 // The hook reads only platform and signing policy from the builder context.
@@ -61,7 +67,7 @@ void test("resource policy rejects unexpected directories, files and symlinks", 
   const { mkdtemp, writeFile, mkdir, symlink, rm } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
   const path = await import("node:path");
-  const { verifyResources } = await import("../scripts/verify-package.ts");
+  const { verifyResources } = await import("../src/verify-package.ts");
   const root = await mkdtemp(path.join(tmpdir(), "release-resources-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await writeFile(path.join(root, "app.asar"), "");
@@ -82,7 +88,7 @@ void test("resource policy rejects unexpected directories, files and symlinks", 
 });
 
 void test("Windows releases require a Windows host before packaging", async () => {
-  const { default: verifyBuildHost } = await import("../scripts/verify-build-host.ts");
+  const { default: verifyBuildHost } = await import("../src/verify-build-host.ts");
   for (const host of ["darwin", "linux"] as const) {
     assert.throws(() => verifyBuildHost(buildContext("win32"), host), /must be built on Windows/);
     assert.doesNotThrow(() => verifyBuildHost(buildContext("win32", false), host));
@@ -92,8 +98,7 @@ void test("Windows releases require a Windows host before packaging", async () =
 });
 
 void test("publisher requirements are passed to signature tools without shell interpolation", async () => {
-  const { appleRequirement, verifyWindowsSignature } =
-    await import("../scripts/verify-signature.ts");
+  const { appleRequirement, verifyWindowsSignature } = await import("../src/verify-signature.ts");
   assert.match(appleRequirement("ABC1234567"), /subject.OU.*ABC1234567/);
   assert.throws(() => appleRequirement('bad"identity'), /Invalid EXPECTED_APPLE_TEAM_ID/);
   verifyWindowsSignature("C:\\app's folder\\app.exe", (command, args, options) => {
@@ -103,4 +108,26 @@ void test("publisher requirements are passed to signature tools without shell in
     assert.match(args[args.length - 1], /Status -ne 'Valid'/);
     assert.ok(!args[args.length - 1].includes("app's folder"));
   });
+});
+
+void test("asset policy supports other app layouts without permitting source or traversal", () => {
+  const policy = {
+    outputDir: "build/client",
+    resourcesDir: "build/client/data",
+    requiredEntries: ["build/client/main.cjs", "build/client/windows/settings.html"],
+  };
+  const entries = ["package.json", ...policy.requiredEntries, "build/client/data/model.bin"];
+  assert.doesNotThrow(() => verifyPolicyEntries(entries, policy));
+  assert.throws(() => verifyPolicyEntries(entries.slice(0, 2), policy), /Missing packaged entry/);
+  for (const entry of [
+    "dist/main/index.js",
+    "build/client/data/source.ts",
+    "build/client/../secret.json",
+    "build/client/a\\b.json",
+  ]) {
+    assert.throws(
+      () => verifyPolicyEntries([...entries, entry], policy),
+      /Unexpected packaged file/,
+    );
+  }
 });

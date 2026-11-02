@@ -1,18 +1,20 @@
 {
   "appId": "electron-spark-demo",
-  "productName": "Electron Spark Demo",
+  "productName": "Electron Spark",
   "asar": true,
   "directories": {
     "output": "release/${version}"
   },
   "files": ["dist/**/*", "!**/*.map", "!**/*.ts", "!**/.env*", "!node_modules/**/*"],
   "mac": {
+    "icon": "src/resources/icons/macos/icon.icns",
     "artifactName": "${productName}_${version}.${ext}",
     "target": ["dmg", "zip"],
     "notarize": true,
     "hardenedRuntime": true
   },
   "win": {
+    "icon": "src/resources/icons/windows/icon.ico",
     "target": [
       {
         "target": "nsis",
@@ -20,6 +22,9 @@
       }
     ],
     "artifactName": "${productName}_${version}.${ext}"
+  },
+  "linux": {
+    "icon": "src/resources/icons/linux/icons"
   },
   "nsis": {
     "oneClick": false,
@@ -29,9 +34,9 @@
   },
   "forceCodeSigning": true,
   "publish": null,
-  "beforePack": "./scripts/verify-build-host.ts",
-  "afterPack": "./scripts/verify-package.ts",
-  "afterSign": "./scripts/verify-signature.ts",
+  "beforePack": "./scripts/release-hooks.ts",
+  "afterPack": "./scripts/release-hooks.ts",
+  "afterSign": "./scripts/release-hooks.ts",
   "electronFuses": {
     "runAsNode": false,
     "enableNodeOptionsEnvironmentVariable": false,
@@ -43,5 +48,5 @@
   "dmg": {
     "sign": true
   },
-  "afterAllArtifactBuild": "./scripts/verify-artifacts.ts"
+  "afterAllArtifactBuild": "./scripts/release-hooks.ts"
 }

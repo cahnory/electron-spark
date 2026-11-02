@@ -12,7 +12,9 @@
         "scripts/*.ts",
         "src/view/routes/**/*.{ts,tsx}"
       ],
-      "project": ["src/**/*.{ts,tsx}", "*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
+      "project": ["src/**/*.{ts,tsx}", "*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
+    },
+    "libs/electron-builder-verification": {
       "ignoreBinaries": ["ditto"]
     }
   },

@@ -11,7 +11,7 @@ const rendererData = {
     "view": {
       ...(VITE_DEV_SERVER_URL ? { url: new URL("view/index.html", VITE_DEV_SERVER_URL).href } : { path: resolve(dirname, "../../dist/view/index.html") }),
       "window": {
-        "title": "Electron + Vite + React",
+        "title": "Electron Spark",
         "webPreferences": {
           "preload": resolve(dirname, "../view/preload.ts")
         },
