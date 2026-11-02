@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { verifyEntries, requireNotarizationCredentials } from "../scripts/verify-package.mjs";
+import type { AfterPackContext } from "electron-builder";
+
+import { verifyEntries, requireNotarizationCredentials } from "../scripts/verify-package.ts";
 
 const required = ["package.json", "dist/main/index.js", "dist/view/index.html"];
-const buildContext = (electronPlatformName, forceCodeSigning = true) => ({
-  electronPlatformName,
-  packager: { config: { forceCodeSigning } },
-});
+// The hook reads only platform and signing policy from the builder context.
+const buildContext = (electronPlatformName: string, forceCodeSigning = true) =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Partial builder context supplies exactly the fields this hook reads.
+  ({
+    electronPlatformName,
+    packager: { config: { forceCodeSigning } },
+  }) as AfterPackContext;
 
 void test("release asset policy rejects dependency trees, source, credentials and maps", () => {
   assert.doesNotThrow(() =>
@@ -56,7 +61,7 @@ void test("resource policy rejects unexpected directories, files and symlinks", 
   const { mkdtemp, writeFile, mkdir, symlink, rm } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
   const path = await import("node:path");
-  const { verifyResources } = await import("../scripts/verify-package.mjs");
+  const { verifyResources } = await import("../scripts/verify-package.ts");
   const root = await mkdtemp(path.join(tmpdir(), "release-resources-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await writeFile(path.join(root, "app.asar"), "");
@@ -77,8 +82,8 @@ void test("resource policy rejects unexpected directories, files and symlinks", 
 });
 
 void test("Windows releases require a Windows host before packaging", async () => {
-  const { default: verifyBuildHost } = await import("../scripts/verify-build-host.mjs");
-  for (const host of ["darwin", "linux"]) {
+  const { default: verifyBuildHost } = await import("../scripts/verify-build-host.ts");
+  for (const host of ["darwin", "linux"] as const) {
     assert.throws(() => verifyBuildHost(buildContext("win32"), host), /must be built on Windows/);
     assert.doesNotThrow(() => verifyBuildHost(buildContext("win32", false), host));
     assert.doesNotThrow(() => verifyBuildHost(buildContext("darwin"), host));
@@ -88,14 +93,14 @@ void test("Windows releases require a Windows host before packaging", async () =
 
 void test("publisher requirements are passed to signature tools without shell interpolation", async () => {
   const { appleRequirement, verifyWindowsSignature } =
-    await import("../scripts/verify-signature.mjs");
+    await import("../scripts/verify-signature.ts");
   assert.match(appleRequirement("ABC1234567"), /subject.OU.*ABC1234567/);
   assert.throws(() => appleRequirement('bad"identity'), /Invalid EXPECTED_APPLE_TEAM_ID/);
   verifyWindowsSignature("C:\\app's folder\\app.exe", (command, args, options) => {
     assert.equal(command, "powershell.exe");
-    assert.equal(options.env.RELEASE_EXECUTABLE, "C:\\app's folder\\app.exe");
-    assert.match(args.at(-1), /EXPECTED_WINDOWS_PUBLISHER/);
-    assert.match(args.at(-1), /Status -ne 'Valid'/);
-    assert.ok(!args.at(-1).includes("app's folder"));
+    assert.equal(options.env?.RELEASE_EXECUTABLE, "C:\\app's folder\\app.exe");
+    assert.match(args[args.length - 1], /EXPECTED_WINDOWS_PUBLISHER/);
+    assert.match(args[args.length - 1], /Status -ne 'Valid'/);
+    assert.ok(!args[args.length - 1].includes("app's folder"));
   });
 });

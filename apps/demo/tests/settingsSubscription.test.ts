@@ -2,16 +2,17 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { setTimeout } from "node:timers/promises";
 
+import type { Settings } from "../src/main/settings.ts";
 import { subscribeSettings } from "../src/view/providers/settingsSubscription.ts";
 
 void test("settings recover from initial and later failures and stop on disposal", async () => {
-  let update;
-  let fail;
+  let update!: (state: Settings) => void;
+  let fail!: (error: unknown) => void;
   let attempts = 0;
   let unsubscribed = false;
-  const values = [];
-  const errors = [];
-  const source = {
+  const values: string[] = [];
+  const errors: unknown[] = [];
+  const source: Parameters<typeof subscribeSettings>[0] = {
     subscribe(onUpdate, onError) {
       update = onUpdate;
       fail = onError;
@@ -23,7 +24,7 @@ void test("settings recover from initial and later failures and stop on disposal
       attempts++;
       fail(new Error("reconnecting"));
       if (attempts === 1) throw new Error("offline");
-      const state = { locale: attempts === 2 ? "en" : "fr" };
+      const state: Settings = { locale: attempts === 2 ? "en" : "fr" };
       update(state);
       return state;
     },

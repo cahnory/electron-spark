@@ -43,7 +43,9 @@ void test("production window validation rejects security exceptions", () => {
 
 void test("production CSP supplies a default and rejects executable remote or inline scripts", async () => {
   const { productionCsp } = await import("../src/csp.ts");
-  assert.match(productionCsp("<html><head></head></html>")[0].attrs.content, /script-src 'self'/);
+  const content = productionCsp("<html><head></head></html>")[0].attrs?.content;
+  assert.equal(typeof content, "string");
+  assert.match(String(content), /script-src 'self'/);
   for (const scripts of ["'unsafe-inline'", "'unsafe-eval'", "*", "https:", "data:"]) {
     assert.throws(
       () =>

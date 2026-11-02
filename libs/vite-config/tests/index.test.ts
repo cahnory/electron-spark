@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 
 import { createBuilder } from "vite";
 
 import { defineElectronConfig } from "../src/index.ts";
 
-const context = { command: "build", mode: "production" };
+const context = { command: "build" as const, mode: "production" };
 
-async function fixture(t) {
+async function fixture(t: TestContext) {
   const projectDir = await mkdtemp(path.join(tmpdir(), "electron-config-"));
   t.after(() => rm(projectDir, { recursive: true, force: true }));
   await Promise.all(
@@ -43,36 +43,40 @@ await test("merges named overrides while preserving discovery and nested default
     vite: { server: { port: 5173 }, plugins: [plugin] },
   })(context);
   assert.equal(config.base, "./");
-  assert.equal(config.server.port, 5173);
-  assert.ok(config.plugins.includes(plugin));
-  assert.ok(config.plugins.length > 1);
-  assert.equal(config.environments.electron.input, "main/index.ts");
-  assert.equal(config.environments.electron.build.ssr, true);
-  assert.equal(config.environments.electron.build.sourcemap, true);
-  assert.equal(config.environments.client.input.length, 3);
-  assert.equal(config.environments.client.define.APP_NAME, '"test"');
-  const preloads = Object.entries(config.environments).filter(([name]) =>
+  assert.equal(config.server!.port, 5173);
+  assert.ok(config.plugins!.includes(plugin));
+  assert.ok(config.plugins!.length > 1);
+  assert.equal(config.environments!.electron.input, "main/index.ts");
+  assert.equal(config.environments!.electron.build!.ssr, true);
+  assert.equal(config.environments!.electron.build!.sourcemap, true);
+  assert.ok(Array.isArray(config.environments!.client.input));
+  assert.equal(config.environments!.client.input.length, 3);
+  assert.equal(config.environments!.client.define!.APP_NAME, '"test"');
+  const preloads = Object.entries(config.environments!).filter(([name]) =>
     name.startsWith("preload"),
   );
   assert.equal(preloads.length, 2);
   for (const [, preload] of preloads) {
-    assert.equal(preload.build.minify, false);
-    assert.equal(preload.build.emptyOutDir, false);
-    assert.equal(preload.build.rolldownOptions.output.format, "cjs");
-    assert.ok(preload.build.rolldownOptions.external.includes("electron"));
-    assert.ok(preload.build.rolldownOptions.external.includes("custom-external"));
+    assert.equal(preload.build!.minify, false);
+    assert.equal(preload.build!.emptyOutDir, false);
+    const output = preload.build!.rolldownOptions!.output;
+    assert.ok(output && !Array.isArray(output));
+    assert.equal(output.format, "cjs");
+    assert.ok(Array.isArray(preload.build!.rolldownOptions!.external));
+    assert.ok(preload.build!.rolldownOptions!.external.includes("electron"));
+    assert.ok(preload.build!.rolldownOptions!.external.includes("custom-external"));
   }
 });
 
 await test("callbacks mutate, replace and delete defaults, with root customization last", async (t) => {
   const projectDir = await fixture(t);
-  const entries = [];
+  const entries: string[] = [];
   const factory = defineElectronConfig({
     projectDir,
     main(config, env) {
       assert.equal(env.mode, "production");
-      config.build.sourcemap = true;
-      delete config.build.emptyOutDir;
+      config.build!.sourcemap = true;
+      delete config.build!.emptyOutDir;
     },
     renderer(config) {
       config.input = ["replacement.html"];
@@ -80,27 +84,29 @@ await test("callbacks mutate, replace and delete defaults, with root customizati
     preload(config, { entry, command }) {
       assert.equal(command, "build");
       entries.push(entry);
-      config.build.minify = entry.startsWith("view/");
-      config.build.rolldownOptions.external = ["electron"];
+      config.build!.minify = entry.startsWith("view/");
+      config.build!.rolldownOptions!.external = ["electron"];
     },
     vite(config) {
-      assert.equal(config.environments.electron.build.sourcemap, true);
-      config.environments.electron.build.sourcemap = false;
+      assert.equal(config.environments!.electron.build!.sourcemap, true);
+      config.environments!.electron.build!.sourcemap = false;
     },
   });
   const config = factory(context);
-  assert.equal(config.environments.electron.build.sourcemap, false);
-  assert.equal("emptyOutDir" in config.environments.electron.build, false);
-  assert.deepEqual(config.environments.client.input, ["replacement.html"]);
+  assert.equal(config.environments!.electron.build!.sourcemap, false);
+  assert.equal("emptyOutDir" in config.environments!.electron.build!, false);
+  assert.deepEqual(config.environments!.client.input, ["replacement.html"]);
   assert.deepEqual(
     entries.toSorted((a, b) => a.localeCompare(b)),
     ["view/preload.ts", "views/settings/preload.ts"],
   );
-  assert.equal(config.environments.preload0.build.minify, true);
-  assert.equal(config.environments.preload1.build.minify, false);
-  assert.deepEqual(config.environments.preload0.build.rolldownOptions.external, ["electron"]);
-  config.environments.preload0.build.rolldownOptions.external.push("leak");
-  assert.deepEqual(factory(context).environments.preload0.build.rolldownOptions.external, [
+  assert.equal(config.environments!.preload0.build!.minify, true);
+  assert.equal(config.environments!.preload1.build!.minify, false);
+  assert.deepEqual(config.environments!.preload0.build!.rolldownOptions!.external, ["electron"]);
+  const external = config.environments!.preload0.build!.rolldownOptions!.external;
+  assert.ok(Array.isArray(external));
+  external.push("leak");
+  assert.deepEqual(factory(context).environments!.preload0.build!.rolldownOptions!.external, [
     "electron",
   ]);
 });
@@ -110,7 +116,9 @@ await test("discovers entries when evaluated rather than when declared", async (
   const factory = defineElectronConfig({ projectDir });
   await mkdir(path.join(projectDir, "src/views/new"));
   await writeFile(path.join(projectDir, "src/views/new/index.html"), "<html></html>");
-  assert.equal(factory(context).environments.client.input.length, 4);
+  const input = factory(context).environments!.client.input;
+  assert.ok(Array.isArray(input));
+  assert.equal(input.length, 4);
 });
 
 await test("emits nested resources unchanged only in the main output", async (t) => {
@@ -121,14 +129,19 @@ await test("emits nested resources unchanged only in the main output", async (t)
   const content = Buffer.from([0, 1, 127, 128, 255]);
   await writeFile(path.join(projectDir, "src/resources/data/example.bin"), content);
   const config = defineElectronConfig({ projectDir })(context);
-  const builder = await createBuilder({ ...config, configFile: false, logLevel: "silent" });
+  const builder = await createBuilder({
+    ...config,
+    configFile: false as const,
+    logLevel: "silent",
+  });
   await builder.build(builder.environments.electron);
   const { readFile } = await import("node:fs/promises");
   assert.deepEqual(
     await readFile(path.join(projectDir, "dist/main/resources/data/example.bin")),
     content,
   );
-  assert.ok(config.server.fs.deny.includes("**/resources/**"));
+  assert.ok(config.server!.fs!.deny);
+  assert.ok(config.server!.fs!.deny.includes("**/resources/**"));
 });
 
 await test("rejects resources directory symlinks, including dangling links", async (t) => {
@@ -141,13 +154,21 @@ await test("rejects resources directory symlinks, including dangling links", asy
   const resources = path.join(projectDir, "src/resources");
   await symlink(target, resources, "junction");
   const config = defineElectronConfig({ projectDir })(context);
-  const builder = await createBuilder({ ...config, configFile: false, logLevel: "silent" });
+  const builder = await createBuilder({
+    ...config,
+    configFile: false as const,
+    logLevel: "silent",
+  });
   await assert.rejects(
     builder.build(builder.environments.electron),
     /Resource symlinks are unsupported/,
   );
   await rm(target, { recursive: true });
-  const danglingBuilder = await createBuilder({ ...config, configFile: false, logLevel: "silent" });
+  const danglingBuilder = await createBuilder({
+    ...config,
+    configFile: false as const,
+    logLevel: "silent",
+  });
   await assert.rejects(
     danglingBuilder.build(danglingBuilder.environments.electron),
     /Resource symlinks are unsupported/,

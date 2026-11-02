@@ -3,9 +3,11 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { verifyAppleSignature, verifyWindowsSignature } from "./verify-signature.mjs";
+import type { BuildResult } from "electron-builder";
 
-async function verifyArtifact(artifact) {
+import { verifyAppleSignature, verifyWindowsSignature } from "./verify-signature.ts";
+
+async function verifyArtifact(artifact: string) {
   const extension = path.extname(artifact).toLowerCase();
   if (extension === ".exe") verifyWindowsSignature(artifact);
   else if (extension === ".dmg") verifyAppleSignature(artifact);
@@ -26,7 +28,9 @@ async function verifyArtifact(artifact) {
   }
 }
 
-export default async function verifyArtifacts(result) {
+export default async function verifyArtifacts(
+  result: Pick<BuildResult, "artifactPaths">,
+): Promise<string[]> {
   await Promise.all(result.artifactPaths.map(verifyArtifact));
   return [];
 }

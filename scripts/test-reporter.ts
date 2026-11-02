@@ -1,10 +1,11 @@
 import { basename } from "node:path";
 import { Readable } from "node:stream";
 import { spec } from "node:test/reporters";
+import type { TestEvent } from "node:test/reporters";
 
-export default async function* report(source) {
-  const events = [];
-  let summary;
+export default async function* report(source: AsyncIterable<TestEvent>) {
+  const events: TestEvent[] = [];
+  let summary: Extract<TestEvent, { type: "test:summary" }>["data"] | undefined;
   for await (const event of source) {
     events.push(event);
     if (event.type === "test:summary" && event.data.file === undefined) summary = event.data;

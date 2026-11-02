@@ -6,7 +6,9 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { createFileSystemAdaptor } from "@electron-spark/store";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 
+import type { IpcData } from "../src/data.ts";
 import { assertIpcData } from "../src/data.ts";
 import {
   createIpcAccessPolicy,
@@ -23,9 +25,15 @@ import {
 } from "../src/index.ts";
 import { getIpcContext } from "../src/main.ts";
 import { readResponse } from "../src/response.ts";
+import type {
+  IpcMainTransport,
+  IpcRendererTransport,
+  IpcRequestEvent,
+  IpcFrame,
+} from "../src/transport.ts";
 import { getChannel } from "../src/transport.ts";
 
-const schema = (check) => ({
+const schema = <T extends IpcData>(check: (value: unknown) => value is T): StandardSchemaV1<T> => ({
   "~standard": {
     version: 1,
     vendor: "test",
@@ -33,35 +41,58 @@ const schema = (check) => ({
   },
 });
 const numbers = schema(
-  (args) =>
+  (args): args is [number, number] =>
     Array.isArray(args) && args.length === 2 && args.every((arg) => typeof arg === "number"),
 );
 const number = schema((value) => typeof value === "number");
-const anyData = schema(() => true);
-const noArgs = schema((args) => Array.isArray(args) && args.length === 0);
-const tick = () => new Promise((resolve) => setImmediate(resolve));
+const anyData = schema((_value): _value is IpcData => true);
+const counts = schema(
+  (value): value is { count: number } =>
+    typeof value === "object" &&
+    value !== null &&
+    "count" in value &&
+    typeof value.count === "number",
+);
+const countSecret = schema(
+  (value): value is { count: number; secret: string } =>
+    typeof value === "object" &&
+    value !== null &&
+    "count" in value &&
+    "secret" in value &&
+    typeof value.count === "number" &&
+    typeof value.secret === "string",
+);
+const noArgs = schema((args): args is [] => Array.isArray(args) && args.length === 0);
+const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 function transport() {
-  const handlers = new Map();
-  const sender = new EventEmitter();
-  sender.isDestroyed = () => false;
+  const handlers = new Map<string, Parameters<IpcMainTransport["handle"]>[1]>();
   const events = new EventEmitter();
   const frame = {
-    parent: null,
+    parent: null as IpcFrame | null,
     processId: 1,
     routingId: 1,
     url: "app://test/",
     isDestroyed: () => false,
-    send: (channel, value) => events.emit(channel, {}, structuredClone(value)),
+    send: (channel: string, ...values: unknown[]): void => {
+      events.emit(channel, {}, ...structuredClone(values));
+    },
   };
-  const event = { sender, senderFrame: frame };
-  const main = {
+  const sender = Object.assign(new EventEmitter(), {
+    isDestroyed: (): boolean => false,
+    mainFrame: frame,
+  });
+  const event: { -readonly [K in keyof IpcRequestEvent]: IpcRequestEvent[K] } = {
+    sender,
+    senderFrame: frame,
+  };
+  const main: IpcMainTransport = {
     handle(channel, listener) {
       if (handlers.has(channel)) throw new Error("Duplicate handler");
       handlers.set(channel, listener);
     },
     removeHandler: (channel) => handlers.delete(channel),
   };
-  const renderer = {
+  const renderer: IpcRendererTransport = {
     async invoke(channel, ...args) {
       const handler = handlers.get(channel);
       if (!handler) throw new Error("Missing handler");
@@ -71,6 +102,10 @@ function transport() {
     removeListener: (channel, callback) => events.removeListener(channel, callback),
   };
   return { main, renderer, handlers, sender, event, events, frame };
+}
+function record(value: unknown): Record<string, unknown> {
+  assert.ok(value !== null && typeof value === "object" && !Array.isArray(value));
+  return Object.fromEntries(Object.entries(value));
 }
 const authorize = () => true;
 
@@ -127,7 +162,9 @@ void test("RPC rejects sync exceptions, async rejections, thrown strings, and in
         throw "string";
       },
     }),
+    // @ts-expect-error Deliberately bypass static types to test runtime validation.
     invalid: defineIpcAction({ params: noArgs, handler: () => new Date() }),
+    // @ts-expect-error Deliberately bypass static types to test runtime validation.
     wrong: defineIpcAction({ params: noArgs, handler: () => "bad", result: number }),
   };
   createIpcApiServer("errors", actions, { authorize }).attach(t.main);
@@ -142,7 +179,7 @@ void test("RPC rejects sync exceptions, async rejections, thrown strings, and in
   await assert.rejects(client.invalid(), /plain objects/);
   await assert.rejects(client.wrong(), { name: "IpcValidationError" });
   const response = await t.renderer.invoke(getChannel("call", "errors", "sync"));
-  assert.equal(Object.hasOwn(response.error, "stack"), false);
+  assert.equal(Object.hasOwn(record(record(response).error), "stack"), false);
 });
 
 void test("authorization precedes validation and handler execution", async () => {
@@ -201,7 +238,7 @@ void test("response envelopes accept undefined and optional stacks, reject malfo
 void test("plain data rejects cycles and instances, permits shared references", () => {
   const item = { a: 1 };
   assert.doesNotThrow(() => assertIpcData([undefined, item, item]));
-  const cycle = {};
+  const cycle: { self?: unknown } = {};
   cycle.self = cycle;
   for (const value of [cycle, new Date(), { fn() {} }, Symbol("x")])
     assert.throws(() => assertIpcData(value));
@@ -217,8 +254,8 @@ void test("undefined state initializes once, subscribers are isolated, disposal 
   const detach = state.attach(t.main);
   const bridge = createIpcStateBridge(t.renderer, "state");
   assert.throws(() => bridge.getState(), /not ready/);
-  const updates = [],
-    errors = [];
+  const updates: unknown[] = [],
+    errors: unknown[] = [];
   bridge.subscribe(
     () => {
       throw new Error("subscriber");
@@ -262,8 +299,11 @@ void test("newer updates arriving before the initial snapshot win", async () => 
     return response;
   };
   const bridge = createIpcStateBridge(t.renderer, "race");
-  const updates = [];
-  bridge.subscribe((value) => updates.push(value), assert.fail);
+  const updates: unknown[] = [];
+  bridge.subscribe(
+    (value) => updates.push(value),
+    (error) => assert.fail(String(error)),
+  );
   assert.equal(await bridge.ready(), 1);
   assert.deepEqual(updates, [1]);
   await bridge.dispose();
@@ -271,8 +311,8 @@ void test("newer updates arriving before the initial snapshot win", async () => 
 
 void test("disposing during initialization unregisters after authorization completes", async () => {
   const t = transport();
-  let allow;
-  const allowed = new Promise((resolve) => {
+  let allow!: () => void;
+  const allowed = new Promise<void>((resolve) => {
     allow = resolve;
   });
   const state = await createIpcState("pending", {
@@ -294,13 +334,13 @@ void test("disposing during initialization unregisters after authorization compl
 });
 
 void test("state validates and orders commits; invalid commits do not poison the queue", async () => {
-  let release;
-  const gate = new Promise((resolve) => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const delayed = {
+  const delayed: StandardSchemaV1<number> = {
     "~standard": {
-      version: 1,
+      version: 1 as const,
       vendor: "test",
       validate: async (value) => {
         if (value === 1) await gate;
@@ -316,25 +356,34 @@ void test("state validates and orders commits; invalid commits do not poison the
   release();
   await Promise.all([first, second]);
   assert.equal(state.getState(), 2);
+  // @ts-expect-error Deliberately bypass static types to test runtime validation.
   await assert.rejects(state.setState("bad"), /validation failed/);
   await state.setState(3);
   assert.equal(state.getState(), 3);
 });
 
-const check = (value) =>
-  typeof value.nested.count === "number" ? { value } : { issues: [{ message: "number required" }] };
+const check = (value: unknown): StandardSchemaV1.Result<{ nested: { count: number } }> =>
+  typeof value === "object" &&
+  value !== null &&
+  "nested" in value &&
+  typeof value.nested === "object" &&
+  value.nested !== null &&
+  "count" in value.nested &&
+  typeof value.nested.count === "number"
+    ? { value: { nested: { count: value.nested.count } } }
+    : { issues: [{ message: "number required" }] };
 
 void test("initial state owns nested data before validation yields", async () => {
   await Promise.all(
     [false, true].map(async (asynchronous) => {
       const initial = { nested: { count: 1 } };
-      let release;
-      const gate = new Promise((resolve) => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
         release = resolve;
       });
-      const validator = {
+      const validator: StandardSchemaV1<{ nested: { count: number } }> = {
         "~standard": {
-          version: 1,
+          version: 1 as const,
           vendor: "test",
           validate: asynchronous
             ? async (value) => {
@@ -349,6 +398,7 @@ void test("initial state owns nested data before validation yields", async () =>
         schema: validator,
         authorize,
       });
+      // @ts-expect-error Deliberately bypass static types to test runtime validation.
       initial.nested.count = "invalid";
       release();
       const state = await pending;
@@ -362,7 +412,7 @@ void test("state snapshots own their data and destroyed senders are removed", as
   const initial = { count: 0 };
   const state = await createIpcState("ownership", {
     initialState: initial,
-    schema: anyData,
+    schema: counts,
     authorize,
   });
   state.attach(t.main);
@@ -384,11 +434,11 @@ void test("state subscriptions are frame-scoped and cannot be removed by another
   const state = await createIpcState("secure", { initialState: 0, schema: number, authorize });
   state.attach(t.main);
   const response = await t.renderer.invoke(getChannel("state-subscribe", "secure"), "token");
-  assert.equal(response.ok, true);
+  assert.equal(record(response).ok, true);
   const original = t.event.senderFrame;
-  t.event.senderFrame = { url: "app://test/", isDestroyed: () => false, send() {} };
+  t.event.senderFrame = { ...t.frame, url: "app://test/", isDestroyed: () => false, send() {} };
   const removal = await t.renderer.invoke(getChannel("state-unsubscribe", "secure"), "token");
-  assert.equal(removal.ok, false);
+  assert.equal(record(removal).ok, false);
   assert.equal(t.sender.listenerCount("destroyed"), 1);
   t.event.senderFrame = original;
   await t.renderer.invoke(getChannel("state-unsubscribe", "secure"), "token");
@@ -397,7 +447,7 @@ void test("state subscriptions are frame-scoped and cannot be removed by another
 
 void test("state drops stale revisions and ignores messages for other bridges", async () => {
   const t = transport();
-  let token;
+  let token: unknown;
   const state = await createIpcState("revisions", { initialState: 0, schema: number, authorize });
   state.attach(t.main);
   const invoke = t.renderer.invoke.bind(t.renderer);
@@ -406,14 +456,14 @@ void test("state drops stale revisions and ignores messages for other bridges", 
     return invoke(channel, ...args);
   };
   const bridge = createIpcStateBridge(t.renderer, "revisions");
-  const errors = [];
+  const errors: unknown[] = [];
   bridge.subscribe(
     () => {},
     (error) => errors.push(error),
   );
   await bridge.ready();
   await state.setState(1);
-  const update = (payload) => t.events.emit(getChannel("state", "revisions"), {}, payload);
+  const update = (payload: unknown) => t.events.emit(getChannel("state", "revisions"), {}, payload);
   update({ token, revision: 0, data: 99 });
   update({ token: "other", revision: 100, data: 99 });
   update({ token, revision: -1, data: 99 });
@@ -447,8 +497,8 @@ void test("state removes subscriptions when a frame navigates to another URL", a
 
 void test("navigation during async authorization cannot invoke handlers", async () => {
   const t = transport();
-  let release;
-  const pending = new Promise((resolve) => {
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
     release = resolve;
   });
   let calls = 0;
@@ -477,13 +527,13 @@ void test("navigation during async authorization cannot invoke handlers", async 
 });
 
 void test("shared-reference validation visits each distinct object once and still detects cycles", (context) => {
-  let value = { value: 1 };
+  let value: IpcData = { value: 1 };
   const depth = 12;
   for (let index = 0; index < depth; index++) value = { left: value, right: value };
   const values = context.mock.method(Object, "values");
   assertIpcData(value);
   assert.equal(values.mock.callCount(), depth + 1);
-  const shared = {};
+  const shared: { back?: unknown } = {};
   const cyclic = { left: shared, right: shared };
   shared.back = cyclic;
   assert.throws(() => assertIpcData(cyclic), /cycles/);
@@ -582,12 +632,12 @@ void test("document navigation cleans only the affected frame and its descendant
     isDestroyed: () => false,
     send() {},
   };
-  const frames = [
+  const frames: [string, IpcFrame][] = [
     ["main", t.frame],
     ["child", child],
     ["grandchild", grandchild],
   ];
-  const subscribe = t.handlers.get(getChannel("state-subscribe", "frames"));
+  const subscribe = t.handlers.get(getChannel("state-subscribe", "frames"))!;
   await Promise.all(
     frames.map(async ([token, frame]) => {
       readResponse(await subscribe({ ...t.event, senderFrame: frame }, token));
@@ -595,10 +645,13 @@ void test("document navigation cleans only the affected frame and its descendant
   );
   assert.equal(t.sender.listenerCount("destroyed"), 1);
   assert.equal(t.sender.listenerCount("did-frame-navigate"), 1);
-  const sent = [];
+  const sent: string[] = [];
   for (const [, frame] of frames)
     frame.send = (channel, value) => {
-      if (channel === getChannel("state", "frames")) sent.push(value.token);
+      if (channel === getChannel("state", "frames")) {
+        assert.equal(typeof record(value).token, "string");
+        sent.push(String(record(value).token));
+      }
     };
   child.url += "?tab=settings#/profile";
   await new Promise((resolve) => setTimeout(resolve, 1100));
@@ -683,7 +736,7 @@ void test("caller context survives awaits and isolates concurrent frames", async
     },
   });
   const detach = createIpcApiServer("context", { action }, { authorize }).attach(t.main);
-  const handler = t.handlers.get(getChannel("call", "context", "action"));
+  const handler = t.handlers.get(getChannel("call", "context", "action"))!;
   const values = await Promise.all(
     [t.frame, second].map((frame, index) =>
       handler({ sender: t.sender, senderFrame: frame }, { id: String(index), args: [] }),
@@ -696,12 +749,12 @@ void test("caller context survives awaits and isolates concurrent frames", async
 
 void test("timeouts and AbortSignal cancel main work and release pending authorization", async () => {
   const t = transport();
-  let signal;
+  let signal!: AbortSignal;
   const action = defineIpcAction({
     params: noArgs,
     handler: () => {
       signal = getIpcContext().signal;
-      return new Promise(() => {});
+      return new Promise<never>(() => {});
     },
   });
   const detach = createIpcApiServer("timeout", { action }, { authorize }).attach(t.main);
@@ -727,7 +780,7 @@ void test("timeouts and AbortSignal cancel main work and release pending authori
   const detachPending = createIpcApiServer(
     "auth-never",
     { action },
-    { authorize: () => new Promise(() => {}) },
+    { authorize: () => new Promise<never>(() => {}) },
   ).attach(t.main);
   await assert.rejects(
     createIpcApiBridge(t.renderer, "auth-never", { action: true }, { timeoutMs: 10 }).action(),
@@ -740,11 +793,11 @@ void test("timeouts and AbortSignal cancel main work and release pending authori
 
 void test("same URL reload during async argument validation prevents handler execution", async () => {
   const t = transport();
-  let release;
+  let release!: () => void;
   let called = false;
-  const validator = {
+  const validator: StandardSchemaV1<[]> = {
     "~standard": {
-      version: 1,
+      version: 1 as const,
       vendor: "test",
       validate: () =>
         new Promise((resolve) => {
@@ -776,16 +829,16 @@ void test("state projections isolate windows and functional updates serialize wi
   const second = { ...t.frame, routingId: 2, send() {} };
   const state = await createIpcState("views", {
     initialState: { count: 0, secret: "main only" },
-    schema: anyData,
+    schema: countSecret,
     authorize,
     select: (data, { frame }) => ({ count: data.count, window: frame.routingId }),
   });
   const detach = state.attach(t.main);
-  const subscribe = t.handlers.get(getChannel("state-subscribe", "views"));
+  const subscribe = t.handlers.get(getChannel("state-subscribe", "views"))!;
   const one = readResponse(await subscribe(t.event, "one"));
   const two = readResponse(await subscribe({ sender: t.sender, senderFrame: second }, "two"));
-  assert.deepEqual(one.data, { count: 0, window: 1 });
-  assert.deepEqual(two.data, { count: 0, window: 2 });
+  assert.deepEqual(record(one).data, { count: 0, window: 1 });
+  assert.deepEqual(record(two).data, { count: 0, window: 2 });
   await Promise.all(
     Array.from({ length: 10 }, () =>
       state.setState(async (data) => {
@@ -808,7 +861,7 @@ void test("detach invalidates cached state and reconnect accepts a restarted ser
   const state = await createIpcState("recover", { initialState: 1, schema: number, authorize });
   const detach = state.attach(t.main);
   const bridge = createIpcStateBridge(t.renderer, "recover");
-  const statuses = [];
+  const statuses: unknown[] = [];
   bridge.subscribeStatus((status) => statuses.push(status));
   await bridge.ready();
   await state.setState(2);
@@ -852,7 +905,7 @@ void test("heartbeat detects lost disconnect messages and disposal bounds unreso
   const pending = await createIpcState("never", {
     initialState: 0,
     schema: number,
-    authorize: () => new Promise(() => {}),
+    authorize: () => new Promise<never>(() => {}),
   });
   const stop = pending.attach(t.main);
   const other = createIpcStateBridge(t.renderer, "never");
@@ -875,17 +928,17 @@ void test("reverse RPC validates handlers, rejects spoofed replies, and handles 
   const detach = server.attach(t.main);
   const stop = createIpcRendererBridge(t.renderer, "reverse", {
     add: defineIpcAction({ params: numbers, handler: (a, b) => a + b }),
-    never: defineIpcAction({ params: noArgs, handler: () => new Promise(() => {}) }),
+    never: defineIpcAction({ params: noArgs, handler: () => new Promise<never>(() => {}) }),
   });
   const client = server.client(t.event);
   assert.equal(await client.add(2, 4), 6);
   await assert.rejects(client.add("bad", 4), /validation/);
-  const reply = t.handlers.get(getChannel("renderer-reply", "reverse"));
+  const reply = t.handlers.get(getChannel("renderer-reply", "reverse"))!;
   const spoof = await reply({ sender: t.sender, senderFrame: { ...t.frame } }, "unknown", {
     ok: true,
     data: 99,
   });
-  assert.equal(spoof.ok, false);
+  assert.equal(record(spoof).ok, false);
   const pending = assert.rejects(client.never(), /disposed/);
   await tick();
   detach();
@@ -896,9 +949,13 @@ void test("reverse RPC validates handlers, rejects spoofed replies, and handles 
 
 void test("reverse RPC timeout prevents a handler from starting after validation", async () => {
   const t = transport();
-  let finishValidation;
+  let finishValidation!: (result: StandardSchemaV1.Result<[]>) => void;
   let calls = 0;
-  const server = createIpcRendererServer("slow-renderer", { action: true }, { authorize });
+  const server = createIpcRendererServer(
+    "slow-renderer",
+    { action: true },
+    { authorize, results: { action: anyData } },
+  );
   const detach = server.attach(t.main);
   const stop = createIpcRendererBridge(
     t.renderer,
@@ -910,7 +967,7 @@ void test("reverse RPC timeout prevents a handler from starting after validation
             version: 1,
             vendor: "test",
             validate: () =>
-              new Promise((resolve) => {
+              new Promise<StandardSchemaV1.Result<[]>>((resolve) => {
                 finishValidation = resolve;
               }),
           },
@@ -944,27 +1001,30 @@ for (const failure of ["denied", "throws", "timeout"]) {
       authorize: () => {
         if (allowed) return true;
         if (failure === "throws") throw new Error("Authorization failed");
-        if (failure === "timeout") return new Promise(() => {});
+        if (failure === "timeout") return new Promise<never>(() => {});
         return false;
       },
     });
     const detach = state.attach(t.main);
-    const updates = [];
+    const updates: unknown[] = [];
     t.events.on(getChannel("state", state.channel), (_event, update) => updates.push(update));
     try {
       readResponse(await t.renderer.invoke(getChannel("state-subscribe", state.channel), "owner"));
       allowed = false;
-      const ping = t.handlers.get(getChannel("state-ping", state.channel));
+      const ping = t.handlers.get(getChannel("state-ping", state.channel))!;
       const spoofed = await Promise.all(
         [
           { sender: t.sender, senderFrame: { ...t.frame } },
-          { sender: new EventEmitter(), senderFrame: t.frame },
+          {
+            sender: Object.assign(new EventEmitter(), { isDestroyed: () => false }),
+            senderFrame: t.frame,
+          },
         ].map((stranger) => ping(stranger, "owner")),
       );
-      assert.ok(spoofed.every((response) => response.ok === false));
+      assert.ok(spoofed.every((response) => record(response).ok === false));
       await state.setState(1);
       assert.equal(updates.length, 1);
-      assert.equal((await ping(t.event, "owner")).ok, false);
+      assert.equal(record(await ping(t.event, "owner")).ok, false);
       await state.setState(2);
       assert.equal(updates.length, 1);
       assert.equal(t.sender.listenerCount("destroyed"), 0);
@@ -978,11 +1038,15 @@ void test("transient events validate payloads and remove listeners", async () =>
   const t = transport();
   const sender = createIpcEventSender("progress", number, { authorize });
   const bridge = createIpcEventBridge(t.renderer, "progress", number);
-  const received = [];
-  const stop = bridge.subscribe((value) => received.push(value), assert.fail);
+  const received: unknown[] = [];
+  const stop = bridge.subscribe(
+    (value) => received.push(value),
+    (error) => assert.fail(String(error)),
+  );
   await sender.send(t.event, 20);
   await tick();
   assert.deepEqual(received, [20]);
+  // @ts-expect-error Deliberately bypass static types to test runtime validation.
   await assert.rejects(sender.send(t.event, "invalid"), /validation/);
   stop();
   await sender.send(t.event, 30);
@@ -991,19 +1055,19 @@ void test("transient events validate payloads and remove listeners", async () =>
 
 void test("foreign frames cannot cancel another frame's pending request", async () => {
   const t = transport();
-  let release;
+  let release!: (value: number) => void;
   const action = defineIpcAction({
     params: noArgs,
     handler: () =>
-      new Promise((resolve) => {
+      new Promise<number>((resolve) => {
         release = resolve;
       }),
   });
   const stop = createIpcApiServer("cancel-owner", { action }, { authorize }).attach(t.main);
-  const call = t.handlers.get(getChannel("call", "cancel-owner", "action"));
+  const call = t.handlers.get(getChannel("call", "cancel-owner", "action"))!;
   const pending = call(t.event, { id: "owned", args: [] });
   await tick();
-  const cancel = t.handlers.get(getChannel("cancel", "cancel-owner"));
+  const cancel = t.handlers.get(getChannel("cancel", "cancel-owner"))!;
   await cancel({ sender: t.sender, senderFrame: { ...t.frame } }, "owned");
   release(42);
   assert.equal(readResponse(await pending), 42);
@@ -1019,9 +1083,12 @@ void test("state initialization can be disposed inside an update callback", asyn
   });
   const stop = state.attach(t.main);
   const bridge = createIpcStateBridge(t.renderer, "callback-dispose");
-  bridge.subscribe(() => {
-    void bridge.dispose();
-  }, assert.fail);
+  bridge.subscribe(
+    () => {
+      void bridge.dispose();
+    },
+    (error) => assert.fail(String(error)),
+  );
   await assert.rejects(bridge.ready(), /disposed/);
   assert.equal(bridge.getStatus(), "disposed");
   assert.equal(t.sender.listenerCount("destroyed"), 0);
@@ -1042,7 +1109,7 @@ void test("abandoned state leases expire and timed-out updaters do not block lat
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.equal(t.sender.listenerCount("destroyed"), 0);
   await assert.rejects(
-    state.setState(() => new Promise(() => {})),
+    state.setState(() => new Promise<never>(() => {})),
     /timed out/,
   );
   await state.setState((value) => value + 1);
@@ -1058,19 +1125,19 @@ void test("main validates reverse responses and rejects a spoofed active request
     { authorize, results: { value: number } },
   );
   const stop = server.attach(t.main);
-  let id;
+  let id: unknown;
   t.frame.send = (_channel, message) => {
-    id = message.id;
+    id = record(message).id;
   };
   const pending = server.client(t.event).value();
   const rejected = assert.rejects(pending, /validation/);
   await tick();
-  const reply = t.handlers.get(getChannel("renderer-reply", "untrusted-response"));
+  const reply = t.handlers.get(getChannel("renderer-reply", "untrusted-response"))!;
   const spoof = await reply({ sender: t.sender, senderFrame: { ...t.frame } }, id, {
     ok: true,
     data: 99,
   });
-  assert.equal(spoof.ok, false);
+  assert.equal(record(spoof).ok, false);
   await reply(t.event, id, { ok: true, data: "invalid" });
   await rejected;
   stop();
@@ -1078,7 +1145,12 @@ void test("main validates reverse responses and rejects a spoofed active request
 
 void test("persistent state validates loaded data and propagates read failures", async () => {
   let writes = 0;
-  const storage = { read: async () => "invalid", write: () => writes++ };
+  const storage = {
+    read: async () => "invalid",
+    write: () => {
+      writes++;
+    },
+  };
   await assert.rejects(createIpcState("invalid-storage", { storage, schema: number, authorize }), {
     name: "IpcValidationError",
   });
@@ -1100,15 +1172,15 @@ void test("persistent state validates loaded data and propagates read failures",
 
 void test("persistent state publishes only after saving and recovers from failed writes", async () => {
   const t = transport();
-  let finishWrite;
+  let finishWrite!: () => void;
   let fail = false;
-  const writes = [];
+  const writes: unknown[] = [];
   const storage = {
     read: () => 4,
-    write: (value) => {
+    write: (value: number) => {
       writes.push(value);
       if (fail) throw new Error("disk full");
-      return new Promise((resolve) => {
+      return new Promise<void>((resolve) => {
         finishWrite = resolve;
       });
     },
@@ -1116,8 +1188,11 @@ void test("persistent state publishes only after saving and recovers from failed
   const state = await createIpcState("persist", { storage, schema: number, authorize });
   const stop = state.attach(t.main);
   const bridge = createIpcStateBridge(t.renderer, "persist");
-  const updates = [];
-  bridge.subscribe((value) => updates.push(value), assert.fail);
+  const updates: unknown[] = [];
+  bridge.subscribe(
+    (value) => updates.push(value),
+    (error) => assert.fail(String(error)),
+  );
   await bridge.ready();
   assert.deepEqual(state.getSnapshot(), { revision: 0, data: 4 });
   const first = state.setState((value) => value + 1);
@@ -1137,6 +1212,7 @@ void test("persistent state publishes only after saving and recovers from failed
   await assert.rejects(state.setState(7), /disk full/);
   assert.deepEqual(state.getSnapshot(), { revision: 2, data: 6 });
   assert.deepEqual(updates, [4, 5, 6]);
+  // @ts-expect-error Deliberately bypass static types to test runtime validation.
   await assert.rejects(state.setState("invalid"), { name: "IpcValidationError" });
   await assert.rejects(state.setState(9, 0), /revision conflict/);
   assert.deepEqual(writes, [5, 6, 7]);
@@ -1154,7 +1230,13 @@ void test("persistent state works with filesystem adapters and owns saved data",
   const directory = await mkdtemp(join(tmpdir(), "ipc-state-"));
   context.after(() => rm(directory, { recursive: true, force: true }));
   const storage = createFileSystemAdaptor(join(directory, "settings.json"), { locale: "en" });
-  const locales = schema((value) => value?.locale === "en" || value?.locale === "fr");
+  const locales = schema(
+    (value): value is { locale: string } =>
+      typeof value === "object" &&
+      value !== null &&
+      "locale" in value &&
+      (value.locale === "en" || value.locale === "fr"),
+  );
   const state = await createIpcState("settings", { storage, schema: locales, authorize });
   assert.deepEqual(state.getState(), { locale: "en" });
   await state.setState({ locale: "fr" });
@@ -1167,7 +1249,7 @@ void test("persistent state works with filesystem adapters and owns saved data",
         value.count = 999;
       },
     },
-    schema: anyData,
+    schema: counts,
     authorize,
   });
   await isolated.setState({ count: 1 });
@@ -1267,15 +1349,15 @@ void test("revoking or replacing a grant immediately disconnects subscriptions a
   });
   const detach = service.attach(t.main);
   try {
-    const updates = [];
-    const statuses = [];
+    const updates: unknown[] = [];
+    const statuses: unknown[] = [];
     t.events.on(getChannel("state", "grants"), (_event, value) => updates.push(value));
     t.events.on(getChannel("state-status", "grants"), (_event, value) => statuses.push(value));
-    const exerciseRevocation = async (replace) => {
+    const exerciseRevocation = async (replace: boolean) => {
       readResponse(await t.renderer.invoke(getChannel("state-subscribe", "grants"), "owner"));
       if (replace) revoke = access.grant(t.sender, new URL(t.frame.url));
       else revoke();
-      assert.equal(statuses.at(-1).status, "disconnected");
+      assert.equal(record(statuses.at(-1)).status, "disconnected");
       await service.state.setState((value) => value + 1);
       assert.equal(updates.length, 0);
       if (!replace) {
@@ -1298,14 +1380,14 @@ void test("revocation cancels subscriptions awaiting authorization", async () =>
   t.sender.mainFrame = t.frame;
   const policy = createIpcAccessPolicy();
   const revoke = policy.grant(t.sender, new URL(t.frame.url));
-  let resolve;
+  let resolve!: (value: boolean) => void;
   const delayed = Object.assign(
     () =>
-      new Promise((done) => {
+      new Promise<boolean>((done) => {
         resolve = done;
       }),
     {
-      onRevoke: policy.authorize.onRevoke,
+      onRevoke: policy.authorize.onRevoke!,
     },
   );
   const state = await createIpcState("pending-grant", {
@@ -1330,9 +1412,9 @@ void test("revocation aborts a running API command and detachment removes policy
   t.sender.mainFrame = t.frame;
   const policy = createIpcAccessPolicy();
   const revoke = policy.grant(t.sender, new URL(t.frame.url));
-  let signal;
-  let started;
-  const ready = new Promise((resolve) => {
+  let signal!: AbortSignal;
+  let started!: () => void;
+  const ready = new Promise<void>((resolve) => {
     started = resolve;
   });
   const server = createIpcApiServer(
@@ -1369,10 +1451,10 @@ void test("revocation cancels event validation and pending reverse replies", asy
   t.sender.mainFrame = t.frame;
   const policy = createIpcAccessPolicy();
   let revoke = policy.grant(t.sender, new URL(t.frame.url));
-  let finish;
-  const delayed = {
+  let finish!: (result: StandardSchemaV1.Result<IpcData>) => void;
+  const delayed: StandardSchemaV1<IpcData> = {
     "~standard": {
-      version: 1,
+      version: 1 as const,
       vendor: "test",
       validate: () =>
         new Promise((resolve) => {
@@ -1380,7 +1462,7 @@ void test("revocation cancels event validation and pending reverse replies", asy
         }),
     },
   };
-  const sent = [];
+  const sent: unknown[][] = [];
   t.frame.send = (...args) => sent.push(args);
   const sending = createIpcEventSender("revocation", delayed, { authorize: policy.authorize }).send(
     t.event,
@@ -1403,13 +1485,14 @@ void test("revocation cancels event validation and pending reverse replies", asy
   const pending = server.client(t.event).read();
   const cancelled = assert.rejects(pending, /access revoked/);
   await tick();
-  const id = sent[0][1].id;
+  assert.ok(sent.length);
+  const id = record(sent[0][1]).id;
   revoke();
   const reply = await t.renderer.invoke(getChannel("renderer-reply", "revocation"), id, {
     ok: true,
     data: 1,
   });
-  assert.equal(reply.ok, false);
+  assert.equal(record(reply).ok, false);
   await cancelled;
   detach();
   assert.equal(t.sender.listenerCount("did-frame-navigate"), 0);
@@ -1455,7 +1538,7 @@ void test("status callbacks can join initialization without creating another reg
   });
   const detach = state.attach(t.main);
   const bridge = createIpcStateBridge(t.renderer, "reentrant-ready");
-  const nested = [];
+  const nested: Promise<IpcData>[] = [];
   const stop = bridge.subscribeStatus((status) => {
     if (status === "connecting" && !nested.length) nested.push(bridge.ready());
   });
@@ -1484,7 +1567,7 @@ void test("disposal in a connected callback cancels readiness without stale stat
   bridge.subscribeStatus((status) => {
     if (status === "connected") void bridge.dispose();
   });
-  const statuses = [];
+  const statuses: unknown[] = [];
   bridge.subscribeStatus((status) => statuses.push(status));
   try {
     await assert.rejects(bridge.ready(), /disposed/);
@@ -1497,7 +1580,7 @@ void test("disposal in a connected callback cancels readiness without stale stat
 
 void test("reverse RPC captures arguments before asynchronous authorization", async () => {
   const t = transport();
-  const gate = Promise.withResolvers();
+  const gate = Promise.withResolvers<boolean>();
   const server = createIpcRendererServer(
     "owned-args",
     { echo: true },
@@ -1505,7 +1588,10 @@ void test("reverse RPC captures arguments before asynchronous authorization", as
   );
   const detach = server.attach(t.main);
   const stop = createIpcRendererBridge(t.renderer, "owned-args", {
-    echo: defineIpcAction({ params: anyData, handler: (value) => value }),
+    echo: defineIpcAction({
+      params: schema((args): args is [IpcData] => Array.isArray(args) && args.length === 1),
+      handler: (value) => value,
+    }),
   });
   try {
     const input = { value: 1 };

@@ -1,4 +1,9 @@
-export default function verifyBuildHost(context, hostPlatform = process.platform) {
+import type { AfterPackContext } from "electron-builder";
+
+export default function verifyBuildHost(
+  context: AfterPackContext,
+  hostPlatform: NodeJS.Platform = process.platform,
+) {
   if (
     context.electronPlatformName === "win32" &&
     context.packager.config.forceCodeSigning !== false &&

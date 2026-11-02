@@ -95,5 +95,5 @@ remain `unknown`.
 Run the adapter and versioning tests with Node.js 24 or later:
 
 ```sh
-node --test libs/store/tests/*.test.mjs
+node --test libs/store/tests/*.test.ts
 ```

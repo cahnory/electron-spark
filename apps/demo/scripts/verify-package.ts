@@ -1,6 +1,14 @@
 import { open, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 
+import type { AfterPackContext } from "electron-builder";
+
+interface ArchiveEntry {
+  link?: string;
+  unpacked?: boolean;
+  files?: Record<string, ArchiveEntry>;
+}
+
 const assetExtensions = new Set([
   ".js",
   ".cjs",
@@ -23,7 +31,7 @@ const assetExtensions = new Set([
   ".wasm",
 ]);
 
-export function verifyEntries(entries) {
+export function verifyEntries(entries: string[]) {
   for (const entry of entries) {
     const parts = entry.split("/");
     if (entry === "package.json") continue;
@@ -46,7 +54,7 @@ export function verifyEntries(entries) {
   }
 }
 
-export function requireNotarizationCredentials(env) {
+export function requireNotarizationCredentials(env: NodeJS.ProcessEnv) {
   if (
     !(env.APPLE_ID && env.APPLE_APP_SPECIFIC_PASSWORD && env.APPLE_TEAM_ID) &&
     !(env.APPLE_API_KEY && env.APPLE_API_KEY_ID && env.APPLE_API_ISSUER) &&
@@ -56,7 +64,7 @@ export function requireNotarizationCredentials(env) {
   }
 }
 
-export async function verifyArchive(archive) {
+async function verifyArchive(archive: string) {
   const file = await open(archive, "r");
   try {
     // ASAR starts with a size pickle followed by a pickle containing JSON metadata.
@@ -66,8 +74,8 @@ export async function verifyArchive(archive) {
     if (!length || length > 64 * 1024 * 1024) throw new Error("Invalid ASAR header size");
     const header = Buffer.alloc(length);
     await file.read(header, 0, length, 16);
-    const entries = [];
-    const visit = (directory, parent = "") => {
+    const entries: string[] = [];
+    const visit = (directory: ArchiveEntry, parent = "") => {
       for (const [name, value] of Object.entries(directory.files ?? {})) {
         const entry = parent ? `${parent}/${name}` : name;
         if (value.link || value.unpacked) throw new Error(`Unverified packaged file: ${entry}`);
@@ -83,7 +91,7 @@ export async function verifyArchive(archive) {
 }
 
 /** Electron-owned resources are explicit; additions require review. */
-export async function verifyResources(resources, mac) {
+export async function verifyResources(resources: string, mac: boolean) {
   const allowed = new Set([
     "app.asar",
     "LICENSE.electron.txt",
@@ -105,7 +113,7 @@ export async function verifyResources(resources, mac) {
   );
 }
 
-export default async function verifyPackage(context) {
+export default async function verifyPackage(context: AfterPackContext) {
   const mac = context.electronPlatformName === "darwin";
   if (mac && context.packager.platformSpecificBuildOptions.notarize !== false) {
     requireNotarizationCredentials(process.env);

@@ -5,15 +5,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mock, test } from "node:test";
 
-const handlers = new Map();
-let userData;
+import type { BrowserWindow } from "electron";
+
+import type { Settings } from "../src/main/settings.ts";
+
+type Reply = { ok: boolean; data: { data: Settings } };
+const handlers = new Map<string, (event: unknown, payload: unknown) => Promise<Reply>>();
+let userData: string;
 const app = Object.assign(new EventEmitter(), { getPath: () => userData });
 mock.module("electron", {
   namedExports: {
     app,
     ipcMain: {
-      handle: (channel, handler) => handlers.set(channel, handler),
-      removeHandler: (channel) => handlers.delete(channel),
+      handle: (channel: string, handler: (event: unknown, payload: unknown) => Promise<Reply>) =>
+        handlers.set(channel, handler),
+      removeHandler: (channel: string) => handlers.delete(channel),
     },
   },
 });
@@ -24,6 +30,7 @@ void test("settings IPC validates locale, persists changes, restricts callers, a
   context.after(() => rm(userData, { recursive: true, force: true }));
   const frame = {
     url: "http://localhost:5173/view/index.html",
+    send: (_channel: string, _snapshot: { data: Settings }) => {},
     parent: null,
     isDestroyed: () => false,
   };
@@ -33,9 +40,11 @@ void test("settings IPC validates locale, persists changes, restricts callers, a
   context.after(service.dispose);
   assert.deepEqual(service.state.getState(), { locale: "en" });
   const call = handlers.get('ipc:["call","settings","setLocale"]');
+  assert.ok(call);
   const event = { sender, senderFrame: frame };
   assert.equal((await call(event, { id: "unprovided", args: ["fr"] })).ok, false);
-  const revoke = service.provideTo(window, new URL(frame.url));
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Partial Electron mock supplies only the members exercised by this test.
+  const revoke = service.provideTo(window as unknown as BrowserWindow, new URL(frame.url));
   assert.equal((await call(event, { id: "valid", args: ["fr"] })).ok, true);
   assert.deepEqual(service.state.getState(), { locale: "fr" });
   assert.deepEqual(JSON.parse(await readFile(join(userData, "settings.json"), "utf8")), {
@@ -54,10 +63,12 @@ void test("settings IPC validates locale, persists changes, restricts callers, a
     isDestroyed: () => false,
   });
   const secondWindow = { webContents: secondSender, isDestroyed: () => false };
-  service.provideTo(secondWindow, new URL(secondFrame.url));
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Partial Electron mock supplies only the members exercised by this test.
+  service.provideTo(secondWindow as unknown as BrowserWindow, new URL(secondFrame.url));
   const secondEvent = { sender: secondSender, senderFrame: secondFrame };
   const subscribe = handlers.get('ipc:["state-subscribe","settings"]');
-  const updates = [];
+  assert.ok(subscribe);
+  const updates: Settings[] = [];
   frame.send = (_channel, snapshot) => updates.push(snapshot.data);
   secondFrame.send = (_channel, snapshot) => updates.push(snapshot.data);
   assert.deepEqual((await subscribe(event, "first")).data.data, { locale: "fr" });
@@ -76,7 +87,11 @@ void test("settings IPC validates locale, persists changes, restricts callers, a
   app.emit("will-quit");
   assert.equal(handlers.size, 0);
   assert.equal(app.listenerCount("will-quit"), 0);
-  assert.throws(() => restarted.provideTo(window, new URL(frame.url)), /disposed/);
+  assert.throws(
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Partial Electron mock supplies only the members exercised by this test.
+    () => restarted.provideTo(window as unknown as BrowserWindow, new URL(frame.url)),
+    /disposed/,
+  );
 });
 
 void test("settings rejects unsupported versions, invalid data, and unversioned files", async (context) => {

@@ -1,12 +1,19 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, type ExecFileSyncOptions } from "node:child_process";
 import path from "node:path";
+
+import type { AfterPackContext } from "electron-builder";
+
+type Run = (command: string, args: string[], options: ExecFileSyncOptions) => unknown;
 
 export function appleRequirement(team = process.env.EXPECTED_APPLE_TEAM_ID) {
   if (team && !/^[A-Z0-9]{10}$/.test(team)) throw new Error("Invalid EXPECTED_APPLE_TEAM_ID");
   return "anchor apple generic" + (team ? ` and certificate leaf[subject.OU] = "${team}"` : "");
 }
 
-export function verifyAppleSignature(file, { application = false, run = execFileSync } = {}) {
+export function verifyAppleSignature(
+  file: string,
+  { application = false, run = execFileSync }: { application?: boolean; run?: Run } = {},
+) {
   run("codesign", ["--verify", ...(application ? ["--deep"] : []), "--strict", file], {
     stdio: "inherit",
   });
@@ -14,7 +21,7 @@ export function verifyAppleSignature(file, { application = false, run = execFile
   if (application) run("xcrun", ["stapler", "validate", file], { stdio: "inherit" });
 }
 
-export function verifyWindowsSignature(file, run = execFileSync) {
+export function verifyWindowsSignature(file: string, run: Run = execFileSync) {
   run(
     "powershell.exe",
     [
@@ -30,7 +37,7 @@ export function verifyWindowsSignature(file, run = execFileSync) {
   );
 }
 
-export default function verifySignature(context) {
+export default function verifySignature(context: AfterPackContext) {
   if (context.electronPlatformName === "darwin") {
     verifyAppleSignature(
       path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`),

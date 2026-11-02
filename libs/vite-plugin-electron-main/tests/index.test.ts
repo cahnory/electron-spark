@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
+import type { InlineConfig, ViteDevServer, Plugin } from "vite";
 import {
   createServer as createViteServer,
   createLogger,
@@ -15,7 +16,7 @@ import { electronMain } from "../src/index.ts";
 
 // Exercise the standalone HTTP lifecycle without opening a network port.
 // Vite itself calls the environment listeners before the HTTP listening event.
-async function createServer(options) {
+async function createServer(options: InlineConfig) {
   const server = await createViteServer({
     ...options,
     server: { ...options.server, middlewareMode: false, ws: false },
@@ -23,19 +24,19 @@ async function createServer(options) {
       {
         name: "test-http-transport",
         configureServer(candidate) {
-          candidate.httpServer.address = () => ({ port: 0, address: "127.0.0.1", family: "IPv4" });
+          candidate.httpServer!.address = () => ({ port: 0, address: "127.0.0.1", family: "IPv4" });
           candidate.listen = async () => {
             await Promise.all(
               Object.values(candidate.environments).map((environment) =>
                 environment.listen(candidate),
               ),
             );
-            candidate.httpServer.emit("listening");
+            candidate.httpServer!.emit("listening");
             return candidate;
           };
         },
       },
-      ...(options.plugins ?? []),
+      ...[options.plugins ?? []].flat(),
     ],
   });
   try {
@@ -47,14 +48,14 @@ async function createServer(options) {
   }
 }
 
-async function waitFor(fn, attempts = 100) {
+async function waitFor(fn: () => unknown, attempts = 100): Promise<void> {
   if (await fn()) return;
   if (attempts === 0) throw Error("timeout");
   await new Promise((resolve) => setTimeout(resolve, 50));
   return waitFor(fn, attempts - 1);
 }
 
-const alive = (pid) => {
+const alive = (pid: number) => {
   try {
     process.kill(pid, 0);
     return true;
@@ -83,11 +84,11 @@ for (const fromFile of [false, true]) {
           `import { electronMain } from ${JSON.stringify(new URL("../src/index.ts", import.meta.url).href)}; export default { plugins: electronMain() };`,
         );
       }
-      let launcher,
-        closes = 0,
+      let launcher: Plugin | undefined;
+      let closes = 0,
         buildFailed = false,
-        failure,
-        failedServer;
+        failure: string | undefined,
+        failedServer: ViteDevServer | undefined;
       const pids = async () => {
         try {
           return (await readFile(`${root}/pids`, "utf8")).split(",").filter(Boolean).map(Number);
@@ -95,17 +96,17 @@ for (const fromFile of [false, true]) {
           return [];
         }
       };
-      let server;
+      let server: ViteDevServer | undefined;
       try {
         server = await createServer({
           configFile: fromFile ? `${root}/vite.config.mjs` : false,
           configLoader: "native",
           root,
-          logLevel: "silent",
+          logLevel: "silent" as const,
           server: { middlewareMode: true, ws: false },
           environments: {
             electron: {
-              consumer: "server",
+              consumer: "server" as const,
               input: "main.js",
               build: { ssr: true, outDir: `${root}/dist` },
             },
@@ -140,7 +141,7 @@ for (const fromFile of [false, true]) {
           ],
         });
         await waitFor(() => launcher);
-        const originalProbe = server.config.inlineConfig.plugins.at(-1);
+        const originalProbe = server.config.inlineConfig.plugins!.at(-1);
         assert.equal(
           server.config.plugins.find((plugin) => plugin.name === "probe"),
           originalProbe,
@@ -175,6 +176,7 @@ for (const fromFile of [false, true]) {
         assert(alive(third), "failed restart must keep the original child alive");
         assert.equal(closes, 1, "failed configuration must not create a watcher to close");
         // Vite owns the partial server; our plugin has created no resources.
+        assert.ok(failedServer);
         await failedServer.close();
         failedServer = undefined;
         failure = undefined;
@@ -200,11 +202,12 @@ for (const fromFile of [false, true]) {
   }
 }
 
-const createTestEnvironment = (name, config) => new DevEnvironment(name, config, { hot: false });
+const createTestEnvironment = (name: string, config: import("vite").ResolvedConfig) =>
+  new DevEnvironment(name, config, { hot: false });
 
 void test("serve preserves the environment factory and waits for output hooks before launching", async () => {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "electron-output-")));
-  let server;
+  let server: ViteDevServer | undefined;
   try {
     await mkdir(`${root}/node_modules/electron`, { recursive: true });
     await writeFile(
@@ -217,12 +220,12 @@ void test("serve preserves the environment factory and waits for output hooks be
       `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(root + "/launched")}, fs.readFileSync(${JSON.stringify(root + "/ready")}, 'utf8'));`,
     );
     server = await createServer({
-      configFile: false,
+      configFile: false as const,
       root,
-      logLevel: "silent",
+      logLevel: "silent" as const,
       environments: {
         electron: {
-          consumer: "server",
+          consumer: "server" as const,
           input: "main.js",
           dev: { createEnvironment: createTestEnvironment },
           build: { ssr: true, outDir: `${root}/dist` },
@@ -261,12 +264,12 @@ void test("Electron runtime imports stay external in production, including noExt
       "import { app } from 'electron/main'; import { nativeImage } from 'electron/common'; console.log(app, nativeImage);",
     );
     const builder = await createBuilder({
-      configFile: false,
+      configFile: false as const,
       root,
-      logLevel: "silent",
+      logLevel: "silent" as const,
       environments: {
         electron: {
-          consumer: "server",
+          consumer: "server" as const,
           input: "main.js",
           resolve: { noExternal: true },
           build: { ssr: true, write: false },
@@ -275,8 +278,11 @@ void test("Electron runtime imports stay external in production, including noExt
       plugins: electronMain(),
     });
     const result = await builder.build(builder.environments.electron);
-    assert.match(result.output[0].code, /from ["']electron\/main["']/);
-    assert.match(result.output[0].code, /from ["']electron\/common["']/);
+    assert.ok(!Array.isArray(result) && "output" in result);
+    const entry = result.output[0];
+    assert.ok(entry.type === "chunk");
+    assert.match(entry.code, /from ["']electron\/main["']/);
+    assert.match(entry.code, /from ["']electron\/common["']/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -287,14 +293,17 @@ void test(
   { timeout: 15000 },
   async () => {
     const root = await realpath(await mkdtemp(path.join(tmpdir(), "electron-multiple-outputs-")));
-    let server;
+    let server: ViteDevServer | undefined;
     let failOutput = false;
-    let gate = Promise.withResolvers();
-    let entered = Promise.withResolvers();
-    const errors = [];
+    let gate = Promise.withResolvers<void>();
+    let entered = Promise.withResolvers<void>();
+    const errors: string[] = [];
     const launches = async () => {
       try {
-        return (await readFile(`${root}/launches`, "utf8")).trim().split("\n").map(JSON.parse);
+        return (await readFile(`${root}/launches`, "utf8"))
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line));
       } catch {
         return [];
       }
@@ -311,9 +320,9 @@ void test(
       setInterval(()=>{},1000);`;
       await writeFile(`${root}/main.js`, source);
       server = await createServer({
-        configFile: false,
+        configFile: false as const,
         root,
-        logLevel: "silent",
+        logLevel: "silent" as const,
         customLogger: {
           ...createLogger("silent"),
           error(message) {
@@ -322,7 +331,7 @@ void test(
         },
         environments: {
           electron: {
-            consumer: "server",
+            consumer: "server" as const,
             input: "main.js",
             build: {
               ssr: true,
@@ -367,8 +376,8 @@ void test(
       assert(alive(first.pid));
 
       failOutput = false;
-      gate = Promise.withResolvers();
-      entered = Promise.withResolvers();
+      gate = Promise.withResolvers<void>();
+      entered = Promise.withResolvers<void>();
       await writeFile(`${root}/main.js`, source + "\n// recovered rebuild");
       await entered.promise;
       assert.equal((await launches()).length, 1);

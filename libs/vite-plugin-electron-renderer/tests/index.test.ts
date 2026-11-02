@@ -1,9 +1,19 @@
+import type { InlineConfig, EnvironmentOptions, BuildOptions, Rolldown } from "vite";
+
+import type { ElectronRendererOptions } from "../src/index.ts";
+
+type TestEnvironment = EnvironmentOptions & {
+  build: BuildOptions & {
+    rolldownOptions: Rolldown.RolldownOptions & { output: Rolldown.OutputOptions };
+  };
+};
+type TestConfig = InlineConfig & { environments: Record<string, TestEnvironment> };
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, writeFile, rm, realpath, cp, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -14,9 +24,9 @@ import { electronRenderer, readRendererWindow } from "../src/index.ts";
 
 const execFileAsync = promisify(execFile);
 
-async function fixture(t) {
+async function fixture(t: TestContext) {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "renderer-metadata-")));
-  const cleanups = [];
+  const cleanups: (() => unknown)[] = [];
   t.after(async () => {
     await Promise.all(cleanups.map((cleanup) => cleanup()));
     await rm(root, { recursive: true, force: true });
@@ -34,24 +44,24 @@ async function fixture(t) {
     `${root}/screens/settings/window.json`,
     JSON.stringify({ webPreferences: { preload: "./bridge.js" } }),
   );
-  const options = {
+  const options: ElectronRendererOptions = {
     electronEnvironment: "electron",
     rendererManifestPath: "generated/renderer.ts",
   };
   return {
-    closeBeforeCleanup: (cleanup) => cleanups.push(cleanup),
+    closeBeforeCleanup: (cleanup: () => unknown) => cleanups.push(cleanup),
     root,
     options,
     config: {
-      configFile: false,
+      configFile: false as const,
       root,
-      logLevel: "silent",
+      logLevel: "silent" as const,
       base: "/app/",
       builder: {},
       environments: {
         // Main intentionally precedes the dependencies it imports.
         electron: {
-          consumer: "server",
+          consumer: "server" as const,
           input: "main.js",
           build: {
             ssr: true,
@@ -61,10 +71,10 @@ async function fixture(t) {
         },
         client: {
           input: ["screens/settings/index.html", "panels/help/page.html"],
-          build: { outDir: "dist/client" },
+          build: { outDir: "dist/client", rolldownOptions: { output: {} } },
         },
         preload: {
-          consumer: "server",
+          consumer: "server" as const,
           input: "screens/settings/bridge.js",
           build: {
             ssr: true,
@@ -73,17 +83,17 @@ async function fixture(t) {
           },
         },
       },
-    },
+    } as TestConfig,
   };
 }
-async function data(root) {
+async function data(root: string) {
   const { stdout } = await execFileAsync(process.execPath, [`${root}/dist/main/main.js`], {
     encoding: "utf8",
   });
   return JSON.parse(stdout);
 }
 
-async function checkRendererTypes(root) {
+async function checkRendererTypes(root: string) {
   await writeFile(`${root}/package.json`, JSON.stringify({ type: "module" }));
   await writeFile(
     `${root}/consumer.ts`,
@@ -125,8 +135,8 @@ renderer.renderers["panels/help"].window.webPreferences;
     { cwd: root, encoding: "utf8" },
   );
 }
-async function until(fn) {
-  let lastError;
+async function until(fn: () => unknown) {
+  let lastError: unknown;
   const deadline = performance.now() + 15_000;
   const attempt = async () => {
     try {
@@ -186,8 +196,8 @@ for (const fromFile of [false, true])
     await Promise.all(
       Object.values(server.environments).map((environment) => environment.listen(server)),
     );
-    server.httpServer.address = () => ({ port: 4321, address: "127.0.0.1", family: "IPv4" });
-    server.httpServer.emit("listening");
+    server.httpServer!.address = () => ({ port: 4321, address: "127.0.0.1", family: "IPv4" });
+    server.httpServer!.emit("listening");
     await until(async () => (await data(root)).mode === "serve");
     if (!fromFile) await checkRendererTypes(root);
     const result = await data(root);
@@ -266,23 +276,27 @@ void test("discovers renamed client/server environments and object inputs", asyn
   config.environments.windows = {
     ...config.environments.client,
     consumer: "client",
-    input: undefined,
     build: {
       ...config.environments.client.build,
       rolldownOptions: {
+        output: {},
         input: { settings: "screens/settings/index.html", help: "panels/help/page.html" },
       },
     },
   };
-  config.environments.client = { input: "worker.js", build: { outDir: "dist/unused-client" } };
+  delete config.environments.windows.input;
+  config.environments.client = {
+    input: "worker.js",
+    build: { outDir: "dist/unused-client", rolldownOptions: { output: {} } },
+  };
   config.environments.bridge = config.environments.preload;
   delete config.environments.preload;
   // An unrelated server environment is not a renderer preload.
   await writeFile(`${root}/worker.js`, 'console.log("worker")');
   config.environments.worker = {
-    consumer: "server",
+    consumer: "server" as const,
     input: "worker.js",
-    build: { ssr: true, outDir: "dist/worker" },
+    build: { ssr: true, outDir: "dist/worker", rolldownOptions: { output: {} } },
   };
   await (await createBuilder({ ...config, plugins: [electronRenderer(options)] })).buildApp();
   const result = await data(root);
@@ -317,7 +331,7 @@ void test("rejects multiple environments for the declared preload", async (t) =>
   );
 });
 
-for (const format of ["es", "cjs"]) {
+for (const format of ["es", "cjs"] as const) {
   void test(`runtime paths survive relocation and nested Electron output (${format})`, async (t) => {
     const { root, options, config } = await fixture(t);
     config.environments.electron.build.minify = true;
@@ -690,7 +704,7 @@ void test("discovers view lifecycle changes and recovers missing preloads with a
   });
   try {
     await server.listen();
-    const keys = async (...expected) =>
+    const keys = async (...expected: string[]) =>
       until(
         async () =>
           JSON.stringify(
@@ -718,7 +732,7 @@ void test("discovers view lifecycle changes and recovers missing preloads with a
     );
 
     // A declaration can arrive before its source. Keep watching until the source exists.
-    const errors = [];
+    const errors: string[] = [];
     const logError = server.config.logger.error.bind(server.config.logger);
     server.config.logger.error = (message, ...args) => {
       errors.push(message);
@@ -729,7 +743,7 @@ void test("discovers view lifecycle changes and recovers missing preloads with a
     await writeFile(windowFile, JSON.stringify({ webPreferences: { preload: "../bridge.js" } }));
     await until(missingPreload);
     await writeFile(`${root}/views/new/bridge.js`, 'console.log("first preload")');
-    const preloadContains = async (text) =>
+    const preloadContains = async (text: string) =>
       until(async () => {
         const file = (await data(root)).renderers["views/new"].window.webPreferences?.preload;
         assert.ok(file, `Missing generated preload path for ${text}`);
@@ -800,7 +814,7 @@ void test("manifest stays identical across build, serve, ports and hashed asset 
   await build();
   const manifest = () => readFile(`${root}/generated/renderer.ts`, "utf8");
   const original = await manifest();
-  const serve = async (port) => {
+  const serve = async (port: number) => {
     const server = await createServer({
       ...config,
       server: { ws: false },
@@ -809,8 +823,8 @@ void test("manifest stays identical across build, serve, ports and hashed asset 
     try {
       server.resolvedUrls = { local: [`http://localhost:${port}/app/`], network: [] };
       await Promise.all(Object.values(server.environments).map((env) => env.listen(server)));
-      server.httpServer.address = () => ({ port, address: "127.0.0.1", family: "IPv4" });
-      server.httpServer.emit("listening");
+      server.httpServer!.address = () => ({ port, address: "127.0.0.1", family: "IPv4" });
+      server.httpServer!.emit("listening");
       await until(async () => (await data(root)).mode === "serve");
       assert.equal(await manifest(), original);
       const previous = (await data(root)).renderers["screens/settings"].window.webPreferences

@@ -12,16 +12,16 @@ mock.module("../src/main/renderers.generated.ts", {
   },
 });
 
-const errors = [];
-const exits = [];
-let startupError;
+const errors: { title: string; message: string }[] = [];
+const exits: number[] = [];
+let startupError: Error;
 const app = Object.assign(new EventEmitter(), {
   requestSingleInstanceLock: () => true,
   whenReady: async () => {},
   setAppUserModelId() {},
   getName: () => "demo",
   getPath: () => "/test/userData",
-  exit: (code) => exits.push(code),
+  exit: (code: number) => exits.push(code),
 });
 mock.module("electron", {
   namedExports: {
@@ -32,7 +32,7 @@ mock.module("electron", {
     },
     shell: {},
     dialog: {
-      showErrorBox: (title, message) => {
+      showErrorBox: (title: string, message: string) => {
         errors.push({ title, message });
       },
     },

@@ -9,9 +9,11 @@
         "src/main/index.ts",
         "src/view/index.tsx",
         "src/view/preload.ts",
+        "scripts/*.ts",
         "src/view/routes/**/*.{ts,tsx}"
       ],
-      "project": ["src/**/*.{ts,tsx}", "*.{ts,mjs}", "tests/**/*.mjs"]
+      "project": ["src/**/*.{ts,tsx}", "*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
+      "ignoreBinaries": ["ditto"]
     }
   },
   "ignoreIssues": {

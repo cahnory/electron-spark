@@ -3,19 +3,24 @@ import { EventEmitter } from "node:events";
 import { mock, test } from "node:test";
 import { pathToFileURL } from "node:url";
 
-const opened = [];
-let loadError;
-let lastWindow;
+const opened: string[] = [];
+let loadError: Error | undefined;
+const windows: BrowserWindow[] = [];
 
 class BrowserWindow extends EventEmitter {
-  webContents = new EventEmitter();
+  destroyed = false;
+  loaded = "";
+  openWindow: (details: { url: string }) => { action: "deny" } = () =>
+    assert.fail("Window handler not installed");
+  webContents = Object.assign(new EventEmitter(), {
+    setWindowOpenHandler: (handler: BrowserWindow["openWindow"]) => {
+      this.openWindow = handler;
+    },
+  });
 
   constructor() {
     super();
-    lastWindow = this;
-    this.webContents.setWindowOpenHandler = (handler) => {
-      this.openWindow = handler;
-    };
+    windows.push(this);
   }
 
   isDestroyed() {
@@ -26,7 +31,7 @@ class BrowserWindow extends EventEmitter {
     this.destroyed = true;
   }
 
-  async loadURL(url) {
+  async loadURL(url: string) {
     if (loadError) throw loadError;
     assert.equal(this.webContents.listenerCount("will-navigate"), 1);
     assert.equal(this.webContents.listenerCount("will-redirect"), 1);
@@ -34,7 +39,7 @@ class BrowserWindow extends EventEmitter {
     this.loaded = url;
   }
 
-  async loadFile(file) {
+  async loadFile(file: string) {
     return this.loadURL(pathToFileURL(file).href);
   }
 }
@@ -43,7 +48,7 @@ mock.module("electron", {
   namedExports: {
     BrowserWindow,
     shell: {
-      openExternal: async (url) => {
+      openExternal: async (url: string) => {
         opened.push(url);
       },
     },
@@ -52,16 +57,27 @@ mock.module("electron", {
 
 const { createRenderer } = await import("../src/main/core/windowManager.ts");
 
-for (const mode of ["serve", "build"]) {
-  for (const externalLinks of [undefined, "open", "block"]) {
+for (const mode of ["serve", "build"] as const) {
+  for (const externalLinks of [undefined, "open", "block"] as const) {
     void test(`${mode}: externalLinks=${externalLinks ?? "default"}`, () => {
       const entry =
         mode === "serve"
           ? { url: "http://localhost:5173/view/index.html" }
           : { path: "/tmp/demo app/#renderer/view/index.html" };
-      const renderers = createRenderer({ mode, renderers: { view: { ...entry, window: {} } } });
+      const renderers = createRenderer(
+        mode === "serve"
+          ? {
+              mode,
+              renderers: { view: { url: "http://localhost:5173/view/index.html", window: {} } },
+            }
+          : {
+              mode,
+              renderers: { view: { path: "/tmp/demo app/#renderer/view/index.html", window: {} } },
+            },
+      );
       const win = renderers.create("view", { externalLinks }).create();
-      const rendererUrl = mode === "serve" ? entry.url : pathToFileURL(entry.path).href;
+      assert.ok(win instanceof BrowserWindow);
+      const rendererUrl = "url" in entry ? entry.url : pathToFileURL(entry.path).href;
       assert.equal(win.loaded, rendererUrl);
 
       const internal = [rendererUrl, `${rendererUrl}#/settings`, `${rendererUrl}?theme=dark#/home`];
@@ -107,19 +123,20 @@ for (const mode of ["serve", "build"]) {
   }
 }
 
-for (const mode of ["serve", "build"]) {
+for (const mode of ["serve", "build"] as const) {
   void test(`${mode}: load failures reject readiness and retire the failed window`, async () => {
+    const entry = { url: "http://localhost:5173/", path: "/missing/index.html", window: {} };
     const manager = createRenderer({
-      mode,
+      ...(mode === "serve" ? { mode: "serve" as const } : { mode: "build" as const }),
       renderers: {
-        view: { url: "http://localhost:5173/", path: "/missing/index.html", window: {} },
+        view: entry,
       },
     }).create("view");
     loadError = new Error("Renderer unavailable");
     try {
       manager.create();
       await assert.rejects(manager.ready(), /Renderer unavailable/);
-      assert.equal(lastWindow.destroyed, true);
+      assert.equal(windows.at(-1)!.destroyed, true);
       assert.equal(manager.has(), false);
     } finally {
       loadError = undefined;

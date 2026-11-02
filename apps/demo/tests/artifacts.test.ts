@@ -2,18 +2,18 @@ import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 import { mock, test } from "node:test";
 
-const calls = [];
+const calls: [string, string[]][] = [];
 let rejectSignature = false;
 mock.module("node:child_process", {
   namedExports: {
-    execFileSync(command, args) {
+    execFileSync(command: string, args: string[]) {
       calls.push([command, args]);
       if (command === "ditto") mkdirSync(`${args.at(-1)}/Example.app`);
       if (rejectSignature && command === "codesign") throw new Error("Invalid signature");
     },
   },
 });
-const { default: verifyArtifacts } = await import("../scripts/verify-artifacts.mjs");
+const { default: verifyArtifacts } = await import("../scripts/verify-artifacts.ts");
 
 void test("final artifacts verify DMG and EXE signatures and the app inside ZIPs", async () => {
   await verifyArtifacts({
@@ -29,9 +29,9 @@ void test("final artifacts verify DMG and EXE signatures and the app inside ZIPs
   );
   assert.ok(calls.some(([command]) => command === "powershell.exe"));
   assert.ok(
-    calls.some(([command, args]) => command === "xcrun" && args.at(-1).endsWith("/Example.app")),
+    calls.some(([command, args]) => command === "xcrun" && args.at(-1)?.endsWith("/Example.app")),
   );
-  assert.ok(!calls.some(([command, args]) => command === "xcrun" && args.at(-1).endsWith(".dmg")));
+  assert.ok(!calls.some(([command, args]) => command === "xcrun" && args.at(-1)?.endsWith(".dmg")));
 });
 
 void test("invalid signatures and unsupported artifact formats fail the release", async () => {

@@ -4,13 +4,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
+import type { InlineConfig, ViteDevServer } from "vite";
 import { createServer as createViteServer, createLogger, DevEnvironment } from "vite";
 
 import { buildOnServe, waitForBuildOnServe } from "../src/index.ts";
 
 // Exercise the standalone HTTP lifecycle without opening a network port.
 // Vite itself calls the environment listeners before the HTTP listening event.
-async function createServer(options) {
+async function createServer(options: InlineConfig) {
   const server = await createViteServer({
     ...options,
     server: { ...options.server, middlewareMode: false, ws: false },
@@ -18,19 +19,19 @@ async function createServer(options) {
       {
         name: "test-http-transport",
         configureServer(candidate) {
-          candidate.httpServer.address = () => ({ port: 0, address: "127.0.0.1", family: "IPv4" });
+          candidate.httpServer!.address = () => ({ port: 0, address: "127.0.0.1", family: "IPv4" });
           candidate.listen = async () => {
             await Promise.all(
               Object.values(candidate.environments).map((environment) =>
                 environment.listen(candidate),
               ),
             );
-            candidate.httpServer.emit("listening");
+            candidate.httpServer!.emit("listening");
             return candidate;
           };
         },
       },
-      ...(options.plugins ?? []),
+      ...[options.plugins ?? []].flat(),
     ],
   });
   try {
@@ -42,7 +43,7 @@ async function createServer(options) {
   }
 }
 
-async function waitFor(fn, attempts = 100) {
+async function waitFor(fn: () => unknown, attempts = 100): Promise<void> {
   if (await fn()) return;
   if (attempts === 0) throw Error("timeout");
   await new Promise((resolve) => setTimeout(resolve, 50));
@@ -53,18 +54,18 @@ void test("an initial configure failure never starts a watched builder", async (
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "vite-startup-failure-")));
   let started = false;
   let closed = 0;
-  let failedServer;
+  let failedServer: ViteDevServer | undefined;
   try {
     await writeFile(path.join(root, "main.js"), "console.log('main');");
     await assert.rejects(
       createServer({
-        configFile: false,
+        configFile: false as const,
         root,
-        logLevel: "silent",
+        logLevel: "silent" as const,
         server: { middlewareMode: true, ws: false },
         environments: {
           main: {
-            consumer: "server",
+            consumer: "server" as const,
             input: "main.js",
             build: { ssr: true, outDir: path.join(root, "dist") },
           },
@@ -105,21 +106,21 @@ void test("an initial configure failure never starts a watched builder", async (
 
 void test("close waits for a delayed watcher initialization", async () => {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "vite-delayed-watcher-")));
-  const gate = Promise.withResolvers();
-  const optionsEntered = Promise.withResolvers();
-  let server;
+  const gate = Promise.withResolvers<void>();
+  const optionsEntered = Promise.withResolvers<void>();
+  let server: ViteDevServer | undefined;
   let watcherClosed = 0;
   let buildStarted = 0;
   try {
     await writeFile(path.join(root, "main.js"), "console.log('main');");
     server = await createServer({
-      configFile: false,
+      configFile: false as const,
       root,
-      logLevel: "silent",
+      logLevel: "silent" as const,
       server: { middlewareMode: true, ws: false },
       environments: {
         main: {
-          consumer: "server",
+          consumer: "server" as const,
           input: "main.js",
           build: { ssr: true, outDir: path.join(root, "dist") },
         },
@@ -165,18 +166,18 @@ void test("close waits for a delayed watcher initialization", async () => {
 for (const restartFailure of [false, true]) {
   void test(`a sibling listen failure starts no replacement build during ${restartFailure ? "restart" : "startup"}`, async () => {
     const root = await realpath(await mkdtemp(path.join(tmpdir(), "vite-sibling-failure-")));
-    const started = Promise.withResolvers();
+    const started = Promise.withResolvers<void>();
     let failing = !restartFailure;
-    let server;
+    let server: ViteDevServer | undefined;
     let sessions = 0,
       sessionsClosed = 0,
       watchersClosed = 0;
     try {
       await writeFile(path.join(root, "main.js"), "console.log('main');");
-      const config = {
-        configFile: false,
+      const config: InlineConfig = {
+        configFile: false as const,
         root,
-        logLevel: "silent",
+        logLevel: "silent" as const,
         server: { middlewareMode: true, ws: false },
         environments: {
           client: {
@@ -191,7 +192,7 @@ for (const restartFailure of [false, true]) {
             },
           },
           main: {
-            consumer: "server",
+            consumer: "server" as const,
             input: "main.js",
             build: { ssr: true, outDir: path.join(root, "dist") },
           },
@@ -241,14 +242,14 @@ for (const restartFailure of [false, true]) {
 
 void test("a session setup failure is logged and closes its resources exactly once", async () => {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "vite-session-failure-")));
-  const errors = [];
+  const errors: string[] = [];
   let closed = 0;
-  let server;
+  let server: ViteDevServer | undefined;
   try {
     server = await createServer({
-      configFile: false,
+      configFile: false as const,
       root,
-      logLevel: "silent",
+      logLevel: "silent" as const,
       customLogger: {
         ...createLogger("silent"),
         error(message) {
@@ -285,19 +286,19 @@ void test("a session setup failure is logged and closes its resources exactly on
 
 void test("shutdown cancels unresolved build prerequisites", { timeout: 5000 }, async () => {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "vite-prerequisite-close-")));
-  const prerequisite = Promise.withResolvers();
-  let server;
+  const prerequisite = Promise.withResolvers<void>();
+  let server: ViteDevServer | undefined;
   let builds = 0;
   let closed = 0;
   try {
     await writeFile(path.join(root, "main.js"), "console.log('main');");
     server = await createServer({
-      configFile: false,
+      configFile: false as const,
       root,
-      logLevel: "silent",
+      logLevel: "silent" as const,
       environments: {
         main: {
-          consumer: "server",
+          consumer: "server" as const,
           input: "main.js",
           build: { ssr: true, outDir: path.join(root, "dist") },
         },

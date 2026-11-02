@@ -5,15 +5,20 @@ import path from "node:path";
 import { test } from "node:test";
 import vm from "node:vm";
 
+import type { PluginOption, Plugin, Rolldown } from "vite";
 import { createBuilder, createServer } from "vite";
 
 import { EXPOSED_PRELOADS_KEY } from "../src/runtime/common.ts";
 
-const { electronPreload, electronPreloadExpose, electronPreloadRenderer } = await import(
+const {
+  electronPreload,
+  electronPreloadExpose,
+  electronPreloadRenderer,
+}: typeof import("../src/index.ts") = await import(
   process.env.PRELOAD_PLUGIN_ENTRY ?? "../src/index.ts"
 );
 
-async function fixture(run) {
+async function fixture(run: (root: string) => Promise<void>) {
   const root = await mkdtemp(path.join(tmpdir(), "preload-bridge-"));
   try {
     await writeFile(
@@ -44,28 +49,29 @@ export * as namespace from './shared.ts';
   }
 }
 
-function config(root) {
+function config(root: string) {
   return {
-    configFile: false,
+    configFile: false as const,
     root,
-    logLevel: "silent",
+    logLevel: "silent" as const,
     environments: {
       client: { input: "view.ts", build: { write: false, minify: false } },
       preload: {
-        consumer: "server",
+        consumer: "server" as const,
         input: "preload.ts",
-        resolve: { noExternal: true },
+        resolve: { noExternal: true as const },
         build: {
+          outDir: "dist",
           ssr: true,
           write: false,
           rolldownOptions: {
             external: ["electron"],
-            output: { format: "cjs", codeSplitting: false },
+            output: { format: "cjs" as const, codeSplitting: false },
           },
         },
       },
     },
-    plugins: electronPreload(),
+    plugins: electronPreload() as PluginOption[],
   };
 }
 
@@ -77,23 +83,37 @@ for (const composed of [false, true]) {
         if (!composed) options.plugins = [electronPreloadExpose(), electronPreloadRenderer()];
         const builder = await createBuilder(options);
         const preload = await builder.build(builder.environments.preload);
+        assert.ok(!Array.isArray(preload) && "output" in preload);
         const renderer = await builder.build(builder.environments.client);
+        assert.ok(!Array.isArray(renderer) && "output" in renderer);
         const preloadCode = preload.output.find(
-          (item) => item.type === "chunk" && item.isEntry,
-        ).code;
+          (item): item is Rolldown.OutputChunk => item.type === "chunk" && item.isEntry,
+        )!.code;
         const rendererCode = renderer.output.find(
-          (item) => item.type === "chunk" && item.isEntry,
-        ).code;
+          (item): item is Rolldown.OutputChunk => item.type === "chunk" && item.isEntry,
+        )!.code;
         assert.doesNotMatch(rendererCode, /ipcRenderer|preloadRuns|OnlyType|SharedType/);
-        const view = {};
-        const sandbox = isolated ? {} : view;
+        const view: {
+          api?: {
+            number: number;
+            other: number;
+            ping(): string;
+            renamed: string;
+            default: string;
+            shared: string;
+            namespace: { shared: string };
+          };
+          preloadRuns?: number;
+          [key: string]: unknown;
+        } = {};
+        const sandbox: typeof view = isolated ? {} : view;
         Object.assign(sandbox, {
           process: { contextIsolated: isolated },
-          require: (id) => {
+          require: (id: string) => {
             assert.equal(id, "electron");
             return {
               contextBridge: {
-                exposeInMainWorld: (key, value) => {
+                exposeInMainWorld: (key: string, value: unknown) => {
                   view[key] = value;
                 },
               },
@@ -104,13 +124,13 @@ for (const composed of [false, true]) {
         vm.runInNewContext(preloadCode, sandbox);
         vm.runInNewContext(rendererCode, view);
         assert.equal(sandbox.preloadRuns, 1);
-        assert.equal(view.api.number, 42);
-        assert.equal(view.api.other, 7);
-        assert.equal(view.api.ping(), "pong");
-        assert.equal(view.api.renamed, "aliased");
-        assert.equal(view.api.default, "default value");
-        assert.equal(view.api.shared, "shared");
-        assert.equal(view.api.namespace.shared, "shared");
+        assert.equal(view.api!.number, 42);
+        assert.equal(view.api!.other, 7);
+        assert.equal(view.api!.ping(), "pong");
+        assert.equal(view.api!.renamed, "aliased");
+        assert.equal(view.api!.default, "default value");
+        assert.equal(view.api!.shared, "shared");
+        assert.equal(view.api!.namespace.shared, "shared");
         assert.throws(
           () => vm.runInNewContext(rendererCode, {}),
           /has not been loaded for this view/,
@@ -129,12 +149,15 @@ void test("dev imports use the getter and watch re-exported files", async () => 
     });
     try {
       const result = await server.environments.client.transformRequest("/preload.ts");
+      assert.ok(result);
       assert.match(result.code, /getExposed/);
+      assert.ok(result);
       assert.match(result.code, /shared/);
       assert.doesNotMatch(result.code, /ipcRenderer|preloadRuns/);
       await writeFile(path.join(root, "shared.ts"), "export const added = 1;");
       server.environments.client.moduleGraph.invalidateAll();
       const updated = await server.environments.client.transformRequest("/preload.ts");
+      assert.ok(updated);
       assert.match(updated.code, /added/);
     } finally {
       await server.close();
@@ -150,24 +173,36 @@ void test("each preload environment exposes its own entry under a distinct key",
       "import { second } from './second'; globalThis.result = second;",
     );
     const options = config(root);
-    options.environments.second = {
-      ...options.environments.preload,
-      input: { second: "second.ts" },
-    };
+    Object.assign(options.environments, {
+      second: {
+        ...options.environments.preload,
+        input: { second: "second.ts" },
+      },
+    });
     options.plugins.push(...electronPreload("second"));
     const builder = await createBuilder(options);
     const second = await builder.build(builder.environments.second);
+    assert.ok(!Array.isArray(second) && "output" in second);
     const renderer = await builder.build(builder.environments.client);
-    const view = { process: { contextIsolated: false }, require: () => ({ contextBridge: {} }) };
+    assert.ok(!Array.isArray(renderer) && "output" in renderer);
+    const view: { result?: string; [EXPOSED_PRELOADS_KEY]?: Record<string, boolean> } & Record<
+      string,
+      unknown
+    > = { process: { contextIsolated: false }, require: () => ({ contextBridge: {} }) };
     vm.runInNewContext(
-      second.output.find((item) => item.type === "chunk" && item.isEntry).code,
+      second.output.find(
+        (item): item is Rolldown.OutputChunk => item.type === "chunk" && item.isEntry,
+      )!.code,
       view,
     );
     vm.runInNewContext(
-      renderer.output.find((item) => item.type === "chunk" && item.isEntry).code,
+      renderer.output.find(
+        (item): item is Rolldown.OutputChunk => item.type === "chunk" && item.isEntry,
+      )!.code,
       view,
     );
     assert.equal(view.result, "second");
+    assert.ok(view[EXPOSED_PRELOADS_KEY]);
     assert.equal(view[EXPOSED_PRELOADS_KEY]["second.ts"], true);
     assert.equal(view[EXPOSED_PRELOADS_KEY]["preload.ts"], undefined);
   });
@@ -181,27 +216,29 @@ void test(
       const options = config(root);
       options.environments.preload.build.write = true;
       options.environments.preload.build.outDir = path.join(root, "dist");
-      const reloads = [];
+      const reloads: number[] = [];
       let written = 0;
-      options.plugins.push({
+      const probe: Plugin = {
         name: "observe-preload-output",
         writeBundle() {
           written++;
         },
         configureServer(server) {
-          server.ws.send = (message) => {
-            if (message.type === "full-reload") reloads.push(written);
+          server.ws.send = (message: import("vite").HotPayload | string) => {
+            if (typeof message !== "string" && message.type === "full-reload")
+              reloads.push(written);
           };
         },
-      });
+      };
+      options.plugins.push(probe);
       const server = await createServer({ ...options, server: { ws: false } });
-      server.httpServer.address = () => ({ port: 4321, address: "127.0.0.1", family: "IPv4" });
+      server.httpServer!.address = () => ({ port: 4321, address: "127.0.0.1", family: "IPv4" });
       try {
         // Exercise the listening lifecycle without opening a port.
         await Promise.all(
           Object.values(server.environments).map((environment) => environment.listen(server)),
         );
-        server.httpServer.emit("listening");
+        server.httpServer!.emit("listening");
         await waitFor(() => reloads.includes(1));
         await writeFile(path.join(root, "shared.ts"), "export const shared = 'updated';");
         await waitFor(() => reloads.includes(2));
@@ -212,7 +249,7 @@ void test(
   },
 );
 
-async function waitFor(check, remaining = 100) {
+async function waitFor(check: () => boolean, remaining = 100): Promise<void> {
   if (check()) return;
   if (!remaining) assert.fail("preload rebuild did not reload renderers");
   await new Promise((resolve) => setTimeout(resolve, 25));

@@ -12,8 +12,9 @@ mock.module("../src/main/renderers.generated.ts", {
   },
 });
 
-const windows = [];
+const windows: BrowserWindow[] = [];
 class BrowserWindow extends EventEmitter {
+  minimized = false;
   destroyed = false;
   focused = false;
   webContents = Object.assign(new EventEmitter(), { setWindowOpenHandler() {} });
@@ -45,9 +46,11 @@ const app = Object.assign(new EventEmitter(), {
 mock.module("electron", {
   namedExports: { app, session: { defaultSession: {} }, BrowserWindow, shell: {}, dialog: {} },
 });
-const provided = [];
+const provided: BrowserWindow[] = [];
 mock.module("../src/main/settings.ts", {
-  namedExports: { createSettings: async () => ({ provideTo: (window) => provided.push(window) }) },
+  namedExports: {
+    createSettings: async () => ({ provideTo: (window: BrowserWindow) => provided.push(window) }),
+  },
 });
 
 void test("activation reopens a closed window and grants settings access", async () => {
@@ -69,6 +72,7 @@ void test("activation reopens a closed window and grants settings access", async
 
 void test("second instance restores and focuses the existing window", async () => {
   const window = windows.at(-1);
+  assert.ok(window);
   window.minimized = true;
   window.focused = false;
   app.emit("second-instance");

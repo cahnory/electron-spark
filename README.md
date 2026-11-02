@@ -89,9 +89,10 @@ pnpm --filter @electron-spark/ipc check
 pnpm --filter @electron-spark/demo check:test
 ```
 
-The root `tsconfig.json` covers repository tooling, including package Vite and
-tsdown configurations. Project configurations cover their sources; IPC also has
-a configuration for its type tests.
+The root `tsconfig.json` covers the TypeScript runtime tests and repository
+tooling, including package Vite and tsdown configurations. Node runs the tests
+and shared reporter directly using native type stripping. Project configurations
+cover their sources; IPC also has a configuration for its type tests.
 
 Tools are installed at the root and available to package scripts. Global lint
 and formatting commands already scan the whole repository, so they do not
