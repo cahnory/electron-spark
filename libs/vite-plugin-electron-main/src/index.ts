@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
@@ -30,7 +31,9 @@ export function electronMain(environmentName = "electron"): Plugin[] {
 
 function createSession(server: ViteDevServer) {
   const require = createRequire(path.resolve(server.config.root, "package.json"));
-  const executable: string = require("electron");
+  const electronPath: string = require("electron");
+  // macOS uses the launched bundle's identity for the Dock and app switcher.
+  const executable = process.platform === "darwin" ? realpathSync(electronPath) : electronPath;
   let child: ChildProcess | undefined;
   let closed = false;
   let pending = Promise.resolve();

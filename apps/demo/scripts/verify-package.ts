@@ -96,7 +96,7 @@ export async function verifyResources(resources: string, mac: boolean) {
     "app.asar",
     "LICENSE.electron.txt",
     "LICENSES.chromium.html",
-    ...(mac ? ["electron.icns"] : []),
+    ...(mac ? ["electron.icns", "icon.icns"] : []),
   ]);
   await Promise.all(
     (await readdir(resources, { withFileTypes: true })).map(async (entry) => {

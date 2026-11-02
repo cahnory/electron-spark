@@ -3,6 +3,8 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
 import reactPlugin from "@vitejs/plugin-react";
 
+import { prepareDevElectron } from "./scripts/dev-electron.ts";
+
 const routeTemplate = `%%tsrImports%%
 import type { ReactNode } from "react";
 
@@ -16,6 +18,11 @@ const RouteComponent = (): ReactNode => <div>Hello "%%tsrPath%%"</div>;
 export default defineElectronConfig({
   vite: {
     plugins: [
+      {
+        name: "development-app-name",
+        apply: "serve",
+        configResolved: prepareDevElectron,
+      },
       {
         name: "development-content-security-policy",
         apply: "serve",

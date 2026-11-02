@@ -34,6 +34,7 @@ class BrowserWindow extends EventEmitter {
   focus() {
     this.focused = true;
   }
+  setIcon() {}
   async loadURL() {}
   async loadFile() {}
 }

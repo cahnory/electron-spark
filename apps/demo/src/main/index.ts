@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 
 import { app, dialog, session } from "electron";
 
-import { IS_MAC_OS, MODE } from "./constants.ts";
+import { IS_MAC_OS, MODE, RESOURCES_PATH } from "./constants.ts";
 import { configureSessionPermissions } from "./core/security.ts";
 import { createRenderer } from "./core/windowManager.ts";
 import data from "./renderers.generated.ts";
@@ -52,6 +52,11 @@ const initializeMainProcess = async (
   // startUpdater();
   if (!mainWindow.has()) {
     const window = mainWindow.create();
+    if (process.platform === "win32") {
+      window.setIcon(path.join(RESOURCES_PATH, "icons/windows/icon.ico"));
+    } else if (!IS_MAC_OS) {
+      window.setIcon(path.join(RESOURCES_PATH, "icons/linux/icons/512x512.png"));
+    }
     const documentUrl =
       data.mode === "serve"
         ? new URL(data.renderers.view.url)
@@ -79,6 +84,9 @@ const bootstrap = async (): Promise<void> => {
 
   app.on("session-created", configureSessionPermissions);
   await app.whenReady();
+  if (IS_MAC_OS) {
+    app.dock?.setIcon(path.join(RESOURCES_PATH, "icons/macos/1024x1024.png"));
+  }
   configureSessionPermissions(session.defaultSession);
   const settings = await createSettings();
   app.on("activate", () => {
