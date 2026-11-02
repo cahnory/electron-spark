@@ -2,6 +2,13 @@
 
 Shared Vite configuration for Electron main, renderer, and discovered preload builds.
 
+Files in `srcDir/resources` are emitted unchanged to `outDir/main/resources`
+in development and production. The main process can read them with
+`path.join(import.meta.dirname, "resources", "data.bin")`. Changes trigger the
+watched main build and restart Electron. This directory is denied by the dev
+HTTP server and is separate from renderer `public` assets. Resource symlinks
+are rejected. Include the emitted directory in your packager's file policy.
+
 ```ts
 import { defineElectronConfig } from "@electron-start/vite-config";
 

@@ -32,7 +32,11 @@ export function verifyEntries(entries) {
       parts.some(
         (part) => part.startsWith(".") || /^(?:secrets?|credentials?)(?:[.-]|$)/i.test(part),
       ) ||
-      !assetExtensions.has(path.posix.extname(entry).toLowerCase())
+      (!assetExtensions.has(path.posix.extname(entry).toLowerCase()) &&
+        !(
+          entry.startsWith("dist/main/resources/") &&
+          !/\.(?:[cm]?tsx?|map|pem|key|crt|p12|pfx)$/i.test(entry)
+        ))
     ) {
       throw new Error(`Unexpected packaged file: ${entry}. Review the release asset policy.`);
     }

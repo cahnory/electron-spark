@@ -11,7 +11,13 @@ const buildContext = (electronPlatformName, forceCodeSigning = true) => ({
 
 void test("release asset policy rejects dependency trees, source, credentials and maps", () => {
   assert.doesNotThrow(() =>
-    verifyEntries([...required, "dist/preload/view/preload.cjs", "dist/assets/icon.png"]),
+    verifyEntries([
+      ...required,
+      "dist/preload/view/preload.cjs",
+      "dist/assets/icon.png",
+      "dist/main/resources/data/example.bin",
+      "dist/main/resources/README.md",
+    ]),
   );
   for (const file of [
     "node_modules/internal/src/index.js",
@@ -21,6 +27,11 @@ void test("release asset policy rejects dependency trees, source, credentials an
     "dist/private.pem",
     "dist/credentials.json",
     "dist/secrets/api.json",
+    "dist/assets/example.bin",
+    "dist/main/resources/source.ts",
+    "dist/main/resources/private.pem",
+    "dist/main/resources/.env",
+    "dist/main/resources/credentials.json",
   ]) {
     assert.throws(() => verifyEntries([...required, file]), /Unexpected packaged file/);
   }

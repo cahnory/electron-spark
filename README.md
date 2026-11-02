@@ -94,7 +94,13 @@ inspecte aussi le contenu réel de `app.asar` et refuse les fichiers hors de
 `dist`, les extensions non prévues, les fichiers cachés, les fichiers de secrets
 identifiables et les fichiers dépaquetés. L'ajout de modules natifs ou de nouveaux
 types de ressources nécessite une adaptation explicite de cette politique, avec
-vérification de l'artefact final. La copie globale de `resources` est supprimée.
+vérification de l'artefact final. Les fichiers de `src/resources` sont copiés dans
+`dist/main/resources` en développement et en production, puis inclus dans ASAR.
+Le main peut les lire via `RESOURCES_PATH` (dans `src/main/constants.ts`). Les
+ressources peuvent avoir toute extension, sauf les sources TypeScript, source maps
+et certificats/clés privés exclus par la politique de packaging. Elles sont en
+lecture seule ; conserver les données modifiables dans un répertoire adapté.
+Ce répertoire est bloqué par le serveur HTTP de développement.
 
 La publication est désactivée (`publish: null` et `--publish never`). Avant
 l'ajout d'un updater ou d'une publication, définir explicitement l'identité de

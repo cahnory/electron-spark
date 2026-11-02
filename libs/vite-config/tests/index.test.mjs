@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+
+import { createBuilder } from "vite";
 
 import { defineElectronConfig } from "../src/index.ts";
 
@@ -109,4 +111,45 @@ await test("discovers entries when evaluated rather than when declared", async (
   await mkdir(path.join(projectDir, "src/views/new"));
   await writeFile(path.join(projectDir, "src/views/new/index.html"), "<html></html>");
   assert.equal(factory(context).environments.client.input.length, 4);
+});
+
+await test("emits nested resources unchanged only in the main output", async (t) => {
+  const projectDir = await fixture(t);
+  await mkdir(path.join(projectDir, "src/main"));
+  await writeFile(path.join(projectDir, "src/main/index.ts"), "export const main = true;");
+  await mkdir(path.join(projectDir, "src/resources/data"), { recursive: true });
+  const content = Buffer.from([0, 1, 127, 128, 255]);
+  await writeFile(path.join(projectDir, "src/resources/data/example.bin"), content);
+  const config = defineElectronConfig({ projectDir })(context);
+  const builder = await createBuilder({ ...config, configFile: false, logLevel: "silent" });
+  await builder.build(builder.environments.electron);
+  const { readFile } = await import("node:fs/promises");
+  assert.deepEqual(
+    await readFile(path.join(projectDir, "dist/main/resources/data/example.bin")),
+    content,
+  );
+  assert.ok(config.server.fs.deny.includes("**/resources/**"));
+});
+
+await test("rejects resources directory symlinks, including dangling links", async (t) => {
+  const projectDir = await fixture(t);
+  await mkdir(path.join(projectDir, "src/main"));
+  await writeFile(path.join(projectDir, "src/main/index.ts"), "export const main = true;");
+  const target = path.join(projectDir, "external-resources");
+  await mkdir(target);
+  await writeFile(path.join(target, "private.bin"), "private");
+  const resources = path.join(projectDir, "src/resources");
+  await symlink(target, resources, "junction");
+  const config = defineElectronConfig({ projectDir })(context);
+  const builder = await createBuilder({ ...config, configFile: false, logLevel: "silent" });
+  await assert.rejects(
+    builder.build(builder.environments.electron),
+    /Resource symlinks are unsupported/,
+  );
+  await rm(target, { recursive: true });
+  const danglingBuilder = await createBuilder({ ...config, configFile: false, logLevel: "silent" });
+  await assert.rejects(
+    danglingBuilder.build(danglingBuilder.environments.electron),
+    /Resource symlinks are unsupported/,
+  );
 });

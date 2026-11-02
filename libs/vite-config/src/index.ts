@@ -1,3 +1,4 @@
+import { lstat, readdir, readFile } from "node:fs/promises";
 import { builtinModules } from "node:module";
 import path from "node:path";
 
@@ -12,6 +13,7 @@ import {
   mergeConfig,
   type ConfigEnv,
   type EnvironmentOptions,
+  type Plugin,
   type UserConfig,
   type UserConfigFnObject,
 } from "vite";
@@ -182,6 +184,7 @@ const makeConfig = (options: ElectronConfigOptions, context: ConfigEnv): UserCon
           input: mainEntry,
           build: {
             copyPublicDir: false,
+            emitAssets: true,
             emptyOutDir: true,
             outDir: path.relative(srcDir, path.resolve(outDir, "main")),
             ssr: true,
@@ -194,6 +197,7 @@ const makeConfig = (options: ElectronConfigOptions, context: ConfigEnv): UserCon
       ...preloadEnvironments,
     },
     plugins: [
+      mainResources(path.join(srcDir, "resources")),
       electronRenderer({
         electronEnvironment: "electron",
         clientEnvironment: "client",
@@ -206,6 +210,7 @@ const makeConfig = (options: ElectronConfigOptions, context: ConfigEnv): UserCon
       electronMain(),
     ],
     root: path.relative(process.cwd(), srcDir),
+    server: { fs: { deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "**/resources/**"] } },
   };
 
   config = customize(config, options.vite, context);
@@ -216,3 +221,39 @@ const makeConfig = (options: ElectronConfigOptions, context: ConfigEnv): UserCon
 
   return config;
 };
+
+/** Emit private filesystem assets beside the main bundle in every build. */
+function mainResources(directory: string): Plugin {
+  return {
+    name: "electron-main-resources",
+    applyToEnvironment: (environment) => environment.name === "electron",
+    async buildStart() {
+      this.addWatchFile(directory);
+      const root = await lstat(directory).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return undefined;
+        throw error;
+      });
+      if (!root) return;
+      if (root.isSymbolicLink()) this.error(`Resource symlinks are unsupported: ${directory}`);
+      const visit = async (dir: string): Promise<void> => {
+        this.addWatchFile(dir);
+        await Promise.all(
+          (await readdir(dir, { withFileTypes: true })).map(async (entry) => {
+            const file = path.join(dir, entry.name);
+            if (entry.isSymbolicLink()) this.error(`Resource symlinks are unsupported: ${file}`);
+            if (entry.isDirectory()) await visit(file);
+            else if (entry.isFile()) {
+              this.addWatchFile(file);
+              this.emitFile({
+                type: "asset",
+                fileName: `resources/${path.relative(directory, file).split(path.sep).join("/")}`,
+                source: await readFile(file),
+              });
+            }
+          }),
+        );
+      };
+      await visit(directory);
+    },
+  };
+}
