@@ -71,7 +71,7 @@ is not passed to `BrowserWindow`.
 
 ```json
 {
-  "$schema": "../../../node_modules/@electron-start/vite-plugin-electron-renderer/window.schema.json",
+  "$schema": "../../../node_modules/@electron-spark/vite-plugin-electron-renderer/window.schema.json",
   "title": "Custom settings title",
   "width": 900,
   "autoHideMenuBar": true,

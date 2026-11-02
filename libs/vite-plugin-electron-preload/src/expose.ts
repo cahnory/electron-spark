@@ -10,7 +10,7 @@ export function electronPreloadExpose(environmentName = "preload"): Plugin {
   const entries = preloadEntries(environmentName);
   const wrap = (entry: string) => wrapperPrefix + entries.resolve(entry);
   return {
-    name: `@electron-start/vite-plugin-electron-preload:expose:${environmentName}`,
+    name: `@electron-spark/vite-plugin-electron-preload:expose:${environmentName}`,
     enforce: "pre",
     configResolved: (config) => entries.configure(config),
     options(options) {

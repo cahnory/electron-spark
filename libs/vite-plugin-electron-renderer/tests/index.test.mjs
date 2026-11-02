@@ -6,7 +6,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { buildOnServe } from "@electron-start/vite-plugin-build-on-serve";
+import { buildOnServe } from "@electron-spark/vite-plugin-build-on-serve";
 import { createBuilder, createServer } from "vite";
 
 import { electronRenderer, readRendererWindow } from "../src/index.ts";
@@ -168,7 +168,7 @@ for (const fromFile of [false, true])
         `${root}/vite.config.mjs`,
         `
       import { electronRenderer } from ${JSON.stringify(new URL("../src/index.ts", import.meta.url).href)};
-      import { buildOnServe } from ${JSON.stringify(import.meta.resolve("@electron-start/vite-plugin-build-on-serve"))};
+      import { buildOnServe } from ${JSON.stringify(import.meta.resolve("@electron-spark/vite-plugin-build-on-serve"))};
       export default { ...${JSON.stringify(config)}, plugins: [electronRenderer(${JSON.stringify(options)}), buildOnServe("preload"), buildOnServe("electron")] };
     `,
       );
@@ -412,7 +412,7 @@ void test("reads HTML metadata and merges configurable window options with the e
     `${root}/screens/settings/display.json`,
     JSON.stringify({
       $schema:
-        "../../../node_modules/@electron-start/vite-plugin-electron-renderer/window.schema.json",
+        "../../../node_modules/@electron-spark/vite-plugin-electron-renderer/window.schema.json",
       title: "Custom title",
       autoHideMenuBar: true,
       width: 900,
@@ -595,7 +595,7 @@ void test("reloads file-based environments after changing, removing and adding a
     configFile,
     `
     import { electronRenderer, readRendererWindow } from ${JSON.stringify(new URL("../src/index.ts", import.meta.url).href)};
-    import { buildOnServe } from ${JSON.stringify(import.meta.resolve("@electron-start/vite-plugin-build-on-serve"))};
+    import { buildOnServe } from ${JSON.stringify(import.meta.resolve("@electron-spark/vite-plugin-build-on-serve"))};
     export default () => {
       const config = ${JSON.stringify(config)};
       const { preload } = readRendererWindow(${JSON.stringify(`${root}/screens/settings/index.html`)});
@@ -660,7 +660,7 @@ void test("discovers view lifecycle changes and recovers missing preloads with a
     configFile,
     `
     import { electronRenderer, discoverRendererHtml, readRendererWindow } from ${JSON.stringify(new URL("../src/index.ts", import.meta.url).href)};
-    import { buildOnServe } from ${JSON.stringify(import.meta.resolve("@electron-start/vite-plugin-build-on-serve"))};
+    import { buildOnServe } from ${JSON.stringify(import.meta.resolve("@electron-spark/vite-plugin-build-on-serve"))};
     export default () => {
       const config = ${JSON.stringify(config)};
       const options = ${JSON.stringify(dynamicOptions)};

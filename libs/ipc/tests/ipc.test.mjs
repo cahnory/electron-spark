@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { createFileSystemAdaptor } from "@electron-start/store";
+import { createFileSystemAdaptor } from "@electron-spark/store";
 
 import { assertIpcData } from "../src/data.ts";
 import {

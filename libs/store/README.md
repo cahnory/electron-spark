@@ -1,10 +1,10 @@
-# @electron-start/store
+# @electron-spark/store
 
 Async stores with serialized reads and mutations, optional Standard Schema
 validation, and interchangeable storage adapters.
 
 ```ts
-import { createMemoryAdaptor, createStore } from "@electron-start/store";
+import { createMemoryAdaptor, createStore } from "@electron-spark/store";
 
 const store = createStore({ storage: createMemoryAdaptor({ count: 0 }) });
 await store.update(({ count }) => ({ count: count + 1 }));
@@ -27,7 +27,7 @@ import {
   createStore,
   createVersionedStorage,
   UnsupportedVersionError,
-} from "@electron-start/store";
+} from "@electron-spark/store";
 import { z } from "zod";
 
 const settingsSchema = z.object({ enabled: z.boolean() });

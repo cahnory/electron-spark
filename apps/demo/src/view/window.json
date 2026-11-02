@@ -1,5 +1,5 @@
 {
-  "$schema": "../../node_modules/@electron-start/vite-plugin-electron-renderer/window.schema.json",
+  "$schema": "../../node_modules/@electron-spark/vite-plugin-electron-renderer/window.schema.json",
   "webPreferences": {
     "preload": "./preload.ts"
   }

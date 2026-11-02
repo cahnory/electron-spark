@@ -1,6 +1,6 @@
 {
-  "appId": "electron-start-demo",
-  "productName": "Electron Start Demo",
+  "appId": "electron-spark-demo",
+  "productName": "Electron Spark Demo",
   "asar": true,
   "directories": {
     "output": "release/${version}"

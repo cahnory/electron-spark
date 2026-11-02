@@ -190,10 +190,10 @@ importers:
 
   apps/demo:
     dependencies:
-      '@electron-start/ipc':
+      '@electron-spark/ipc':
         specifier: workspace:*
         version: link:../../libs/ipc
-      '@electron-start/store':
+      '@electron-spark/store':
         specifier: workspace:*
         version: link:../../libs/store
       '@tanstack/react-router':
@@ -221,7 +221,7 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
-      '@electron-start/vite-config':
+      '@electron-spark/vite-config':
         specifier: workspace:*
         version: link:../../libs/vite-config
       '@tanstack/router-plugin':
@@ -252,13 +252,15 @@ importers:
         specifier: ^8.3.5
         version: 8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
 
+  libs/electron-spark: {}
+
   libs/ipc:
     dependencies:
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
     devDependencies:
-      '@electron-start/store':
+      '@electron-spark/store':
         specifier: workspace:*
         version: link:../store
       tsdown:
@@ -276,13 +278,13 @@ importers:
 
   libs/vite-config:
     dependencies:
-      '@electron-start/vite-plugin-electron-main':
+      '@electron-spark/vite-plugin-electron-main':
         specifier: workspace:*
         version: link:../vite-plugin-electron-main
-      '@electron-start/vite-plugin-electron-preload':
+      '@electron-spark/vite-plugin-electron-preload':
         specifier: workspace:*
         version: link:../vite-plugin-electron-preload
-      '@electron-start/vite-plugin-electron-renderer':
+      '@electron-spark/vite-plugin-electron-renderer':
         specifier: workspace:*
         version: link:../vite-plugin-electron-renderer
     devDependencies:
@@ -307,7 +309,7 @@ importers:
 
   libs/vite-plugin-electron-main:
     dependencies:
-      '@electron-start/vite-plugin-build-on-serve':
+      '@electron-spark/vite-plugin-build-on-serve':
         specifier: workspace:*
         version: link:../vite-plugin-build-on-serve
     devDependencies:
@@ -323,7 +325,7 @@ importers:
 
   libs/vite-plugin-electron-preload:
     dependencies:
-      '@electron-start/vite-plugin-build-on-serve':
+      '@electron-spark/vite-plugin-build-on-serve':
         specifier: workspace:*
         version: link:../vite-plugin-build-on-serve
     devDependencies:
@@ -339,7 +341,7 @@ importers:
 
   libs/vite-plugin-electron-renderer:
     dependencies:
-      '@electron-start/vite-plugin-build-on-serve':
+      '@electron-spark/vite-plugin-build-on-serve':
         specifier: workspace:*
         version: link:../vite-plugin-build-on-serve
       parse5:

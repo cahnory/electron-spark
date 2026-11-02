@@ -1,4 +1,4 @@
-import { buildOnServe } from "@electron-start/vite-plugin-build-on-serve";
+import { buildOnServe } from "@electron-spark/vite-plugin-build-on-serve";
 import type { Plugin } from "vite";
 
 import { electronPreloadExpose } from "./expose.ts";

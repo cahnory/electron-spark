@@ -1,5 +1,5 @@
 {
-  "name": "@electron-start/vite-plugin-electron-renderer",
+  "name": "@electron-spark/vite-plugin-electron-renderer",
   "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",
@@ -47,7 +47,7 @@
     "test": "pnpm check:test"
   },
   "dependencies": {
-    "@electron-start/vite-plugin-build-on-serve": "workspace:*",
+    "@electron-spark/vite-plugin-build-on-serve": "workspace:*",
     "parse5": "^8.0.1"
   },
   "devDependencies": {

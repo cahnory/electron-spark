@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { waitForBuildOnServe } from "@electron-start/vite-plugin-build-on-serve";
+import { waitForBuildOnServe } from "@electron-spark/vite-plugin-build-on-serve";
 import { parse, type DefaultTreeAdapterMap } from "parse5";
 import { normalizePath, type Plugin, type ResolvedConfig, type ViteDevServer } from "vite";
 
@@ -340,7 +340,7 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
   };
 
   return {
-    name: "@electron-start/vite-plugin-electron-renderer",
+    name: "@electron-spark/vite-plugin-electron-renderer",
     sharedDuringBuild: true,
     transformIndexHtml: {
       order: "post",

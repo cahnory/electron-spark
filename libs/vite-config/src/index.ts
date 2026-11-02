@@ -2,13 +2,13 @@ import { lstat, readdir, readFile } from "node:fs/promises";
 import { builtinModules } from "node:module";
 import path from "node:path";
 
-import { electronMain } from "@electron-start/vite-plugin-electron-main";
-import { electronPreload } from "@electron-start/vite-plugin-electron-preload";
+import { electronMain } from "@electron-spark/vite-plugin-electron-main";
+import { electronPreload } from "@electron-spark/vite-plugin-electron-preload";
 import {
   electronRenderer,
   discoverRendererHtml,
   readRendererWindow,
-} from "@electron-start/vite-plugin-electron-renderer";
+} from "@electron-spark/vite-plugin-electron-renderer";
 import {
   mergeConfig,
   type ConfigEnv,

@@ -2,14 +2,14 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 
-import { buildOnServe } from "@electron-start/vite-plugin-build-on-serve";
+import { buildOnServe } from "@electron-spark/vite-plugin-build-on-serve";
 import type { Plugin, ViteDevServer } from "vite";
 
 /** Build and restart only the configured Electron main environment in dev. */
 export function electronMain(environmentName = "electron"): Plugin[] {
   return [
     {
-      name: "@electron-start/vite-plugin-electron-main",
+      name: "@electron-spark/vite-plugin-electron-main",
       enforce: "pre",
       applyToEnvironment: (environment) => environment.name === environmentName,
       resolveId(id) {

@@ -1,4 +1,10 @@
-# electron-start
+# electron-spark
+
+Le dépôt utilise une racine privée `electron-spark-workspace`. Le package
+[`electron-spark`](libs/electron-spark/README.md) est un placeholder publiable
+qui oriente vers les packages `@electron-spark/*`, sans réexports ni dépendances.
+Installer directement les packages nécessaires ; `vite-config` est une dépendance
+de développement.
 
 ## Contrôles
 
@@ -19,8 +25,8 @@ le support TypeScript natif de Node.js et les mocks de modules expérimentaux
 Pour cibler un package depuis la racine :
 
 ```sh
-pnpm --filter @electron-start/ipc check
-pnpm --filter @electron-start/demo check:test
+pnpm --filter @electron-spark/ipc check
+pnpm --filter @electron-spark/demo check:test
 ```
 
 Le `tsconfig.json` racine couvre le tooling de tout le dépôt, y compris les

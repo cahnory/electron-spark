@@ -1,4 +1,4 @@
-import { defineElectronConfig } from "@electron-start/vite-config";
+import { defineElectronConfig } from "@electron-spark/vite-config";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
 import reactPlugin from "@vitejs/plugin-react";

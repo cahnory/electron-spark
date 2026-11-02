@@ -5,7 +5,7 @@ Pass Electron's `ipcMain` and `ipcRenderer` directly; the package has no Electro
 runtime dependency. All incoming action arguments require a Standard Schema
 validator (for example Zod or Valibot).
 
-Use `@electron-start/ipc/main` in main and `@electron-start/ipc/renderer` in
+Use `@electron-spark/ipc/main` in main and `@electron-spark/ipc/renderer` in
 preload. The renderer entry has no Node built-in imports and can be bundled into
 a sandboxed preload. The root entry includes main APIs and therefore imports
 `node:async_hooks`; do not bundle it into a sandboxed preload. Import application
@@ -19,7 +19,7 @@ import {
   createIpcState,
   defineIpcAction,
   getIpcContext,
-} from "@electron-start/ipc/main";
+} from "@electron-spark/ipc/main";
 // main/counter.ts
 import { ipcMain, BrowserWindow } from "electron";
 import { z } from "zod";
@@ -59,7 +59,7 @@ const detachApi = createIpcApiServer("counter", actions, { authorize }).attach(i
 ```
 
 ```ts
-import { createIpcApiBridge, createIpcStateBridge } from "@electron-start/ipc/renderer";
+import { createIpcApiBridge, createIpcStateBridge } from "@electron-spark/ipc/renderer";
 // preload.ts
 import { contextBridge, ipcRenderer } from "electron";
 
@@ -183,10 +183,10 @@ their transport listeners. Callbacks are isolated from transport cleanup.
 ## Persistent state
 
 Pass `storage` instead of `initialState` to load and persist state through a
-`{ read, write }` adapter. Adapters from `@electron-start/store` work directly:
+`{ read, write }` adapter. Adapters from `@electron-spark/store` work directly:
 
 ```ts
-import { createFileSystemAdaptor } from "@electron-start/store";
+import { createFileSystemAdaptor } from "@electron-spark/store";
 
 const settings = await createIpcState("settings", {
   storage: createFileSystemAdaptor(settingsPath, { locale: "en" as "fr" | "en" }),
@@ -215,7 +215,7 @@ not watched or synchronized. A `Store` can be adapted with
 
 ```ts
 // preload: install validated handlers, optionally forwarding to an app callback.
-import { createIpcRendererBridge, defineIpcAction } from "@electron-start/ipc/renderer";
+import { createIpcRendererBridge, defineIpcAction } from "@electron-spark/ipc/renderer";
 const rendererActions = {
   canClose: defineIpcAction({
     params: z.tuple([]),
@@ -227,7 +227,7 @@ export type RendererActions = typeof rendererActions;
 const stopRenderer = createIpcRendererBridge(ipcRenderer, "document", rendererActions);
 
 // main: target a specific trusted frame (for example from an active IPC context).
-import { createIpcRendererServer, getIpcContext } from "@electron-start/ipc/main";
+import { createIpcRendererServer, getIpcContext } from "@electron-spark/ipc/main";
 const renderer = createIpcRendererServer<RendererActions>(
   "document",
   { canClose: true },
@@ -295,7 +295,7 @@ cleanup detaches both servers and can be called repeatedly. State remains usable
 in main after detachment, and the service can be attached again.
 
 ```ts
-import { createIpcAccessPolicy, createIpcService, defineIpcAction } from "@electron-start/ipc/main";
+import { createIpcAccessPolicy, createIpcService, defineIpcAction } from "@electron-spark/ipc/main";
 import { app, ipcMain } from "electron";
 import { z } from "zod";
 

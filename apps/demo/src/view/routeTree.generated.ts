@@ -9,50 +9,50 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from "./routes/__root"
-import { Route as ElectronStartIndexRouteImport } from "./routes/_electron-start/index"
+import { Route as ElectronSparkIndexRouteImport } from "./routes/_electron-spark/index"
 
-const ElectronStartIndexRoute = ElectronStartIndexRouteImport.update({
-  id: "/_electron-start/",
+const ElectronSparkIndexRoute = ElectronSparkIndexRouteImport.update({
+  id: "/_electron-spark/",
   path: "/",
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof ElectronStartIndexRoute
+  "/": typeof ElectronSparkIndexRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof ElectronStartIndexRoute
+  "/": typeof ElectronSparkIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  "/_electron-start/": typeof ElectronStartIndexRoute
+  "/_electron-spark/": typeof ElectronSparkIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths: "/"
   fileRoutesByTo: FileRoutesByTo
   to: "/"
-  id: "__root__" | "/_electron-start/"
+  id: "__root__" | "/_electron-spark/"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  ElectronStartIndexRoute: typeof ElectronStartIndexRoute
+  ElectronSparkIndexRoute: typeof ElectronSparkIndexRoute
 }
 
 declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    "/_electron-start/": {
-      id: "/_electron-start/"
+    "/_electron-spark/": {
+      id: "/_electron-spark/"
       path: "/"
       fullPath: "/"
-      preLoaderRoute: typeof ElectronStartIndexRouteImport
+      preLoaderRoute: typeof ElectronSparkIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  ElectronStartIndexRoute: ElectronStartIndexRoute,
+  ElectronSparkIndexRoute: ElectronSparkIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

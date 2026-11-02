@@ -14,7 +14,7 @@ import {
 
 export type IpcStateSnapshot<Data extends IpcData> = { revision: number; data: Data };
 
-/** Structurally compatible with @electron-start/store storage adapters. */
+/** Structurally compatible with @electron-spark/store storage adapters. */
 export type IpcStateStorage<Data extends IpcData> = {
   read: () => unknown;
   write: (data: Data) => void | Promise<void>;

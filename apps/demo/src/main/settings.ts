@@ -1,7 +1,7 @@
 import path from "node:path";
 
-import { defineIpcAction } from "@electron-start/ipc/main";
-import { createFileSystemAdaptor, createVersionedStorage } from "@electron-start/store";
+import { defineIpcAction } from "@electron-spark/ipc/main";
+import { createFileSystemAdaptor, createVersionedStorage } from "@electron-spark/store";
 import { app } from "electron";
 import { z } from "zod";
 

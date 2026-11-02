@@ -28,7 +28,7 @@ export type BuildOnServeOptions = {
 };
 
 // Config bundling can load multiple copies of this module; the server owns the shared state.
-const prerequisitesKey = Symbol.for("@electron-start/build-on-serve/prerequisites");
+const prerequisitesKey = Symbol.for("@electron-spark/build-on-serve/prerequisites");
 type CoordinatedServer = ViteDevServer & {
   [prerequisitesKey]?: Map<string, Promise<void>[]>;
 };
@@ -43,7 +43,7 @@ export function waitForBuildOnServe(server: ViteDevServer, name: string, ready: 
 export function buildOnServe(environmentName: string, options: BuildOnServeOptions = {}): Plugin {
   const sessions = new WeakMap<Environment, { close(): Promise<void> }>();
   return {
-    name: `@electron-start/vite-plugin-build-on-serve:${environmentName}`,
+    name: `@electron-spark/vite-plugin-build-on-serve:${environmentName}`,
     apply: "serve",
     configureServer(server) {
       const environment = server.environments[environmentName];

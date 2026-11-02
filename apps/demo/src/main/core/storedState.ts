@@ -1,10 +1,10 @@
-import type { IpcActions, IpcData, IpcValidator } from "@electron-start/ipc";
+import type { IpcActions, IpcData, IpcValidator } from "@electron-spark/ipc";
 import {
   createIpcAccessPolicy,
   createIpcService,
   type IpcState,
   type IpcStateStorage,
-} from "@electron-start/ipc/main";
+} from "@electron-spark/ipc/main";
 import { app, ipcMain, type BrowserWindow } from "electron";
 
 /** Main-owned persisted state and commands, with optional access for any number of windows. */

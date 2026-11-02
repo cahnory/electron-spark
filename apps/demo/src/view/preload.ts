@@ -1,4 +1,4 @@
-import { createIpcApiBridge, createIpcStateBridge } from "@electron-start/ipc/renderer";
+import { createIpcApiBridge, createIpcStateBridge } from "@electron-spark/ipc/renderer";
 import { ipcRenderer } from "electron";
 
 import type { Settings, SettingsActions } from "../main/settings.ts";

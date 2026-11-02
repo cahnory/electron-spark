@@ -1,5 +1,5 @@
 {
-  "name": "@electron-start/ipc",
+  "name": "@electron-spark/ipc",
   "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",
@@ -58,7 +58,7 @@
     "@standard-schema/spec": "^1.1.0"
   },
   "devDependencies": {
-    "@electron-start/store": "workspace:*",
+    "@electron-spark/store": "workspace:*",
     "tsdown": "^0.23.2"
   }
 }

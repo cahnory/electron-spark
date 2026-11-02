@@ -70,7 +70,7 @@ const Index = (): ReactNode => {
         <header className={styles.header}>
           <div className={styles.brand}>
             <Orbit className={styles.accent} size={22} aria-hidden />
-            Electron Start
+            Electron Spark
           </div>
           <div className={styles.localeControl}>
             <select
@@ -209,6 +209,6 @@ const Index = (): ReactNode => {
   );
 };
 
-export const Route = createFileRoute("/_electron-start/")({
+export const Route = createFileRoute("/_electron-spark/")({
   component: Index,
 });

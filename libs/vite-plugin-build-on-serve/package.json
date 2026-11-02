@@ -1,5 +1,5 @@
 {
-  "name": "@electron-start/vite-plugin-build-on-serve",
+  "name": "@electron-spark/vite-plugin-build-on-serve",
   "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",

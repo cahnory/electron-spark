@@ -1,5 +1,5 @@
 {
-  "name": "@electron-start/vite-plugin-electron-preload",
+  "name": "@electron-spark/vite-plugin-electron-preload",
   "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",
@@ -54,7 +54,7 @@
     "test": "pnpm check:test"
   },
   "dependencies": {
-    "@electron-start/vite-plugin-build-on-serve": "workspace:*"
+    "@electron-spark/vite-plugin-build-on-serve": "workspace:*"
   },
   "devDependencies": {
     "electron": "^45.0.0",

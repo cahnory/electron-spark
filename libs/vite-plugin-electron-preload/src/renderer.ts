@@ -10,7 +10,7 @@ const getHelper = runtimeHelper("getExposed");
 export function electronPreloadRenderer(environmentName = "preload"): Plugin {
   const entries = preloadEntries(environmentName);
   return {
-    name: `@electron-start/vite-plugin-electron-preload:renderer:${environmentName}`,
+    name: `@electron-spark/vite-plugin-electron-preload:renderer:${environmentName}`,
     enforce: "pre",
     configResolved: (config) => entries.configure(config),
     async load(id) {

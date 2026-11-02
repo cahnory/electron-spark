@@ -1,4 +1,4 @@
-# @electron-start/vite-config
+# @electron-spark/vite-config
 
 Shared Vite configuration for Electron main, renderer, and discovered preload builds.
 
@@ -10,7 +10,7 @@ HTTP server and is separate from renderer `public` assets. Resource symlinks
 are rejected. Include the emitted directory in your packager's file policy.
 
 ```ts
-import { defineElectronConfig } from "@electron-start/vite-config";
+import { defineElectronConfig } from "@electron-spark/vite-config";
 
 export default defineElectronConfig({
   srcDir: "src",

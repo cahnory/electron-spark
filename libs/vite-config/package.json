@@ -1,5 +1,5 @@
 {
-  "name": "@electron-start/vite-config",
+  "name": "@electron-spark/vite-config",
   "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",
@@ -44,9 +44,9 @@
     "test": "pnpm check:test"
   },
   "dependencies": {
-    "@electron-start/vite-plugin-electron-main": "workspace:*",
-    "@electron-start/vite-plugin-electron-preload": "workspace:*",
-    "@electron-start/vite-plugin-electron-renderer": "workspace:*"
+    "@electron-spark/vite-plugin-electron-main": "workspace:*",
+    "@electron-spark/vite-plugin-electron-preload": "workspace:*",
+    "@electron-spark/vite-plugin-electron-renderer": "workspace:*"
   },
   "devDependencies": {
     "electron": "^45.0.0",
