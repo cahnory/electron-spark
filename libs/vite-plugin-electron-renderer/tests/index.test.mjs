@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, writeFile, rm, realpath, cp, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import { buildOnServe } from "@electron-spark/vite-plugin-build-on-serve";
-import { createBuilder, createServer } from "vite";
+import { createBuilder, createLogger, createServer } from "vite";
 
 import { electronRenderer, readRendererWindow } from "../src/index.ts";
+
+const execFileAsync = promisify(execFile);
 
 async function fixture(t) {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "renderer-metadata-")));
@@ -74,12 +77,10 @@ async function fixture(t) {
   };
 }
 async function data(root) {
-  return JSON.parse(
-    execFileSync(process.execPath, [`${root}/dist/main/main.js`], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }),
-  );
+  const { stdout } = await execFileAsync(process.execPath, [`${root}/dist/main/main.js`], {
+    encoding: "utf8",
+  });
+  return JSON.parse(stdout);
 }
 
 async function checkRendererTypes(root) {
@@ -126,17 +127,18 @@ renderer.renderers["panels/help"].window.webPreferences;
 }
 async function until(fn) {
   let lastError;
-  const attempt = async (remaining) => {
+  const deadline = performance.now() + 15_000;
+  const attempt = async () => {
     try {
       if (await fn()) return;
     } catch (error) {
       lastError = error;
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
-    if (remaining > 1) return attempt(remaining - 1);
+    if (performance.now() < deadline) return attempt();
     throw new Error("Timed out waiting for generated renderer metadata", { cause: lastError });
   };
-  return attempt(200);
+  return attempt();
 }
 
 void test("build collects emitted filenames before compiling main and discovers arbitrary renderer paths and optional preloads", async (t) => {
@@ -683,6 +685,7 @@ void test("discovers view lifecycle changes and recovers missing preloads with a
   );
   const server = await createServer({
     configFile,
+    customLogger: createLogger("silent"),
     server: { port: 0, host: "127.0.0.1", ws: false },
   });
   try {
@@ -715,21 +718,32 @@ void test("discovers view lifecycle changes and recovers missing preloads with a
     );
 
     // A declaration can arrive before its source. Keep watching until the source exists.
+    const errors = [];
+    const logError = server.config.logger.error.bind(server.config.logger);
+    server.config.logger.error = (message, ...args) => {
+      errors.push(message);
+      logError(message, ...args);
+    };
+    const missingPreload = () =>
+      errors.some((message) => message.includes("Preload source does not exist or is not a file:"));
     await writeFile(windowFile, JSON.stringify({ webPreferences: { preload: "../bridge.js" } }));
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await until(missingPreload);
     await writeFile(`${root}/views/new/bridge.js`, 'console.log("first preload")');
     const preloadContains = async (text) =>
       until(async () => {
         const file = (await data(root)).renderers["views/new"].window.webPreferences?.preload;
-        return (
-          file &&
-          (await readFile(file, "utf8")).includes(text) &&
-          (await readFile(`${root}/dist/main/main.js`, "utf8")).includes(path.basename(file))
+        assert.ok(file, `Missing generated preload path for ${text}`);
+        assert.ok((await readFile(file, "utf8")).includes(text), `Preload missing ${text}`);
+        assert.ok(
+          (await readFile(`${root}/dist/main/main.js`, "utf8")).includes(path.basename(file)),
+          `Main build missing preload ${file}`,
         );
+        return true;
       });
     await preloadContains("first preload");
+    errors.length = 0;
     await rm(`${root}/views/new/bridge.js`);
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await until(missingPreload);
     await writeFile(`${root}/views/new/bridge.js`, 'console.log("restored preload")');
     await preloadContains("restored preload");
     await rm(windowFile);
