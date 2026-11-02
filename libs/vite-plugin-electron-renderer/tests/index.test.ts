@@ -742,6 +742,17 @@ void test("discovers view lifecycle changes and recovers missing preloads with a
       errors.some((message) => message.includes("Preload source does not exist or is not a file:"));
     await writeFile(windowFile, JSON.stringify({ webPreferences: { preload: "../bridge.js" } }));
     await until(missingPreload);
+    // Model a source created before watcher.add() finishes initializing on Linux.
+    const watcher = server.watcher;
+    const emit = watcher.emit.bind(watcher);
+    const emitMock = t.mock.method(
+      watcher,
+      "emit",
+      (event: string | symbol, ...args: unknown[]) => {
+        if (event === "add" && args[0] === `${root}/views/new/bridge.js`) return false;
+        return emit(event, ...args);
+      },
+    );
     await writeFile(`${root}/views/new/bridge.js`, 'console.log("first preload")');
     const preloadContains = async (text: string) =>
       until(async () => {
@@ -755,6 +766,7 @@ void test("discovers view lifecycle changes and recovers missing preloads with a
         return true;
       });
     await preloadContains("first preload");
+    emitMock.mock.restore();
     errors.length = 0;
     await rm(`${root}/views/new/bridge.js`);
     await until(missingPreload);

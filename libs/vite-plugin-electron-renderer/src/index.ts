@@ -484,6 +484,7 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
       const watchedWindows = new Set(renderers.map(({ html }) => windowFile(html)));
       const refresh = () => {
         if (closed || restarting) return;
+        let missingSources: string[] = [];
         try {
           const htmlFiles =
             options.viewPatterns === undefined
@@ -506,6 +507,9 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
               candidate.watcher.add([source, path.dirname(source)]);
             }
           }
+          missingSources = declarations.flatMap(({ source }) =>
+            source && !fs.statSync(source, { throwIfNoEntry: false })?.isFile() ? [source] : [],
+          );
           for (const { html } of declarations) readRendererWindow(html, options.windowConfigPath);
           const changed =
             sourceChanged ||
@@ -529,6 +533,24 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
           }
         } catch (error) {
           candidate.config.logger.error(String(error));
+          if (missingSources.length) {
+            // A source can appear while the asynchronous watcher.add() is still
+            // initializing, so recovery cannot depend on receiving its add event.
+            const retry = () => {
+              if (closed || restarting) return;
+              if (
+                missingSources.every((source) =>
+                  fs.statSync(source, { throwIfNoEntry: false })?.isFile(),
+                )
+              ) {
+                refresh();
+              } else {
+                timer = setTimeout(retry, 75);
+              }
+            };
+            clearTimeout(timer);
+            timer = setTimeout(retry, 75);
+          }
         }
       };
       const schedule = (event: string, file: string) => {
