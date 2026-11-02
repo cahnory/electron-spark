@@ -19,7 +19,9 @@ On GitHub, use `main` as the default branch and enable Actions. In Settings →
 Actions → General, enable **Allow GitHub Actions to create and approve pull
 requests**. Create an environment named `release`; configure required reviewers
 there if publishing should require approval. After CI runs successfully, protect
-`main` and require the `validate` check.
+`main` and require the `validate` check. This check requires the full Linux checks
+and package builds, plus the Electron process lifecycle tests on macOS and
+Windows, to pass. A platform failure does not cancel the other platform tests.
 
 GitHub supplies `GITHUB_TOKEN` automatically. No npm write token is needed for
 the trusted publishing setup below. The first push runs validation; it does not

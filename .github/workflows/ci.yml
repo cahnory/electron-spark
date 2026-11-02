@@ -9,7 +9,7 @@ on:
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
-  validate:
+  checks:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,6 +36,52 @@ jobs:
 
       - name: Build packages
         run: pnpm build
+
+  electron-lifecycle:
+    name: electron-lifecycle (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Linux runs the same suite in the full checks job.
+        os: [macos-latest, windows-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test Electron process lifecycle
+        run: pnpm --filter @electron-spark/vite-plugin-electron-main check:test
+
+  # Keep one stable required check for branch protection and release PRs.
+  validate:
+    if: always()
+    needs: [checks, electron-lifecycle]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require all validation jobs to succeed
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          LIFECYCLE_RESULT: ${{ needs.electron-lifecycle.result }}
+        run: |
+          test "$CHECKS_RESULT" = success
+          test "$LIFECYCLE_RESULT" = success
 
   release-pr:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
