@@ -2,7 +2,7 @@
   "name": "@electron-spark/demo",
   "version": "0.1.0",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "author": {
     "name": "François Germain (Cahnory)",
     "email": "cahnory@gmail.com",
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cahnory/physicall.git"
+    "url": "git+https://github.com/cahnory/electron-spark.git"
   },
   "type": "module",
   "main": "dist/main/index.js",

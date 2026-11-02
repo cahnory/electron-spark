@@ -2,7 +2,7 @@
   "name": "electron-spark",
   "version": "0.1.0",
   "description": "Electron Spark package guide. Install the @electron-spark packages you need.",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "author": {
     "name": "François Germain (Cahnory)",
     "email": "cahnory@gmail.com",
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cahnory/physicall.git",
+    "url": "git+https://github.com/cahnory/electron-spark.git",
     "directory": "libs/electron-spark"
   },
   "files": [
