@@ -38,7 +38,9 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@electron-spark/electron-builder-verification": "workspace:*",
     "@electron-spark/vite-config": "workspace:*",
+    "@electron-spark/vite-plugin-electron-app-identity": "workspace:*",
     "@tanstack/router-plugin": "^1.168.48",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

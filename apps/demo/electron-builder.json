@@ -34,9 +34,9 @@
   },
   "forceCodeSigning": true,
   "publish": null,
-  "beforePack": "./scripts/verify-build-host.ts",
-  "afterPack": "./scripts/verify-package.ts",
-  "afterSign": "./scripts/verify-signature.ts",
+  "beforePack": "./scripts/release-hooks.ts",
+  "afterPack": "./scripts/release-hooks.ts",
+  "afterSign": "./scripts/release-hooks.ts",
   "electronFuses": {
     "runAsNode": false,
     "enableNodeOptionsEnvironmentVariable": false,
@@ -48,5 +48,5 @@
   "dmg": {
     "sign": true
   },
-  "afterAllArtifactBuild": "./scripts/verify-artifacts.ts"
+  "afterAllArtifactBuild": "./scripts/release-hooks.ts"
 }

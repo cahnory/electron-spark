@@ -13,7 +13,7 @@ mock.module("node:child_process", {
     },
   },
 });
-const { default: verifyArtifacts } = await import("../scripts/verify-artifacts.ts");
+const { default: verifyArtifacts } = await import("../src/verify-artifacts.ts");
 
 void test("final artifacts verify DMG and EXE signatures and the app inside ZIPs", async () => {
   await verifyArtifacts({

@@ -31,25 +31,40 @@ const assetExtensions = new Set([
   ".wasm",
 ]);
 
-export function verifyEntries(entries: string[]) {
+export interface PackagePolicy {
+  /** Required paths inside app.asar. */
+  requiredEntries?: readonly string[];
+  /** Directory containing compiled assets. */
+  outputDir?: string;
+  /** Directory allowing additional resource formats. */
+  resourcesDir?: string;
+}
+
+export function verifyEntries(entries: string[], policy: PackagePolicy = {}) {
+  const outputDir = policy.outputDir ?? "dist";
+  const resourcesDir = policy.resourcesDir ?? `${outputDir}/main/resources`;
   for (const entry of entries) {
     const parts = entry.split("/");
     if (entry === "package.json") continue;
     if (
-      parts[0] !== "dist" ||
+      !entry.startsWith(`${outputDir}/`) ||
       parts.some(
-        (part) => part.startsWith(".") || /^(?:secrets?|credentials?)(?:[.-]|$)/i.test(part),
+        (part) =>
+          !part ||
+          part.startsWith(".") ||
+          part.includes("\\") ||
+          /^(?:secrets?|credentials?)(?:[.-]|$)/i.test(part),
       ) ||
       (!assetExtensions.has(path.posix.extname(entry).toLowerCase()) &&
         !(
-          entry.startsWith("dist/main/resources/") &&
+          entry.startsWith(`${resourcesDir}/`) &&
           !/\.(?:[cm]?tsx?|map|pem|key|crt|p12|pfx)$/i.test(entry)
         ))
     ) {
       throw new Error(`Unexpected packaged file: ${entry}. Review the release asset policy.`);
     }
   }
-  for (const required of ["package.json", "dist/main/index.js", "dist/view/index.html"]) {
+  for (const required of ["package.json", ...(policy.requiredEntries ?? [])]) {
     if (!entries.includes(required)) throw new Error(`Missing packaged entry: ${required}`);
   }
 }
@@ -64,7 +79,7 @@ export function requireNotarizationCredentials(env: NodeJS.ProcessEnv) {
   }
 }
 
-async function verifyArchive(archive: string) {
+async function verifyArchive(archive: string, policy: PackagePolicy) {
   const file = await open(archive, "r");
   try {
     // ASAR starts with a size pickle followed by a pickle containing JSON metadata.
@@ -84,7 +99,7 @@ async function verifyArchive(archive: string) {
       }
     };
     visit(JSON.parse(header.toString("utf8")));
-    verifyEntries(entries);
+    verifyEntries(entries, policy);
   } finally {
     await file.close();
   }
@@ -113,7 +128,7 @@ export async function verifyResources(resources: string, mac: boolean) {
   );
 }
 
-export default async function verifyPackage(context: AfterPackContext) {
+export default async function verifyPackage(context: AfterPackContext, policy: PackagePolicy = {}) {
   const mac = context.electronPlatformName === "darwin";
   if (mac && context.packager.platformSpecificBuildOptions.notarize !== false) {
     requireNotarizationCredentials(process.env);
@@ -129,5 +144,9 @@ export default async function verifyPackage(context: AfterPackContext) {
   // Local Electron distributions can retain the stock sample application.
   await rm(path.join(resources, "default_app.asar"), { force: true });
   await verifyResources(resources, mac);
-  await verifyArchive(path.join(resources, "app.asar"));
+  await verifyArchive(path.join(resources, "app.asar"), policy);
+}
+
+export function createPackageVerifier(policy: PackagePolicy = {}) {
+  return (context: AfterPackContext) => verifyPackage(context, policy);
 }

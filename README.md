@@ -53,15 +53,17 @@ pnpm install
 pnpm --filter @electron-spark/demo dev
 ```
 
-| Package                                                         | Purpose                                                                      |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [IPC](libs/ipc/README.md)                                       | Validated commands, synchronized state, events, and process access policies. |
-| [Store](libs/store/README.md)                                   | Storage adapters, schema validation, and versioned persistence.              |
-| [Vite config](libs/vite-config/README.md)                       | Shared configuration for main, preload, and renderer builds.                 |
-| [Renderer plugin](libs/vite-plugin-electron-renderer/README.md) | Renderer discovery, window configuration, and generated manifests.           |
-| `@electron-spark/vite-plugin-electron-main`                     | Build and launch the Electron main process.                                  |
-| `@electron-spark/vite-plugin-electron-preload`                  | Build preload scripts and expose APIs to renderers.                          |
-| `@electron-spark/vite-plugin-build-on-serve`                    | Run watched builds alongside the development server.                         |
+| Package                                                                    | Purpose                                                                      |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [IPC](libs/ipc/README.md)                                                  | Validated commands, synchronized state, events, and process access policies. |
+| [Store](libs/store/README.md)                                              | Storage adapters, schema validation, and versioned persistence.              |
+| [Vite config](libs/vite-config/README.md)                                  | Shared configuration for main, preload, and renderer builds.                 |
+| [Renderer plugin](libs/vite-plugin-electron-renderer/README.md)            | Renderer discovery, window configuration, and generated manifests.           |
+| `@electron-spark/vite-plugin-electron-main`                                | Build and launch the Electron main process.                                  |
+| `@electron-spark/vite-plugin-electron-preload`                             | Build preload scripts and expose APIs to renderers.                          |
+| `@electron-spark/vite-plugin-build-on-serve`                               | Run watched builds alongside the development server.                         |
+| [Development app plugin](libs/vite-plugin-electron-app-identity/README.md) | Name and cache the macOS development Electron bundle.                        |
+| [Release verification](libs/electron-builder-verification/README.md)       | Verify packaged files, signing, notarization, and release artifacts.         |
 
 The repository uses a private `electron-spark-workspace` root. The publishable
 [`electron-spark`](libs/electron-spark/README.md) package is a package guide with
