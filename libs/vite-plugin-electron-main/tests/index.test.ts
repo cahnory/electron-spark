@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm, realpath } from "node:fs/promi
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 
 import type { InlineConfig, ViteDevServer, Plugin } from "vite";
 import {
@@ -322,6 +323,7 @@ void test(
     let gate = Promise.withResolvers<void>();
     let entered = Promise.withResolvers<void>();
     const errors: string[] = [];
+    const writtenEntries: string[] = [];
     const launches = async () => {
       try {
         return (await readFile(`${root}/launches`, "utf8"))
@@ -370,6 +372,16 @@ void test(
           },
         },
         plugins: [
+          {
+            name: "record-output-order",
+            writeBundle(options, bundle) {
+              for (const output of Object.values(bundle)) {
+                if (output.type === "chunk" && output.isEntry) {
+                  writtenEntries.push(path.resolve(options.dir!, output.fileName));
+                }
+              }
+            },
+          },
           ...electronMain(),
           {
             name: "hold-second-output",
@@ -390,7 +402,9 @@ void test(
       await waitFor(async () => (await launches()).length === 1);
       const [first] = await launches();
       assert.equal(first.ready, true);
-      assert.match(first.entry, /first\.mjs$/);
+      // Outputs can finish in either order; the launcher uses the first written entry.
+      assert.equal(writtenEntries.length, 2);
+      assert.equal(first.entry, pathToFileURL(writtenEntries[0]).href);
 
       failOutput = true;
       await writeFile(`${root}/main.js`, source + "\n// failed rebuild");
