@@ -1,35 +1,42 @@
-import type { Settings } from "../../main/settings.ts";
+import type { IpcData } from "./data.ts";
+import type { IpcStateBridge } from "./stateBridge.ts";
 
-type SettingsSource = {
-  subscribe(update: (state: Settings) => void, onError: (error: unknown) => void): () => void;
-  reconnect(): Promise<Settings>;
-};
-
-export function subscribeSettings(
-  source: SettingsSource,
-  update: (state: Settings) => void,
-  onError: (error: unknown) => void,
+/** Subscribe with exponential reconnect retries. Disposal leaves the shared bridge alive. */
+export function subscribeIpcState<const T extends IpcData>({
+  source,
+  update,
+  onError,
   retryMs = 1000,
-) {
+}: {
+  source: IpcStateBridge<T>;
+  update: (state: T) => void;
+  onError?: (error: unknown) => void;
+  retryMs?: number;
+}) {
   let active = true;
   let retrying = false;
   let delay = retryMs;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const failed = (error: unknown) => {
     if (!active) return;
-    onError(error);
+    try {
+      onError?.(error);
+    } catch {
+      /* Error reporting must not prevent recovery. */
+    }
     if (!timer && !retrying) {
-      timer = setTimeout(retry, delay);
+      timer = setTimeout(() => connect(false), delay);
       delay = Math.min(delay * 2, 30_000);
     }
   };
-  const retry = () => {
+  const connect = (force: boolean) => {
     clearTimeout(timer);
     timer = undefined;
     if (!active || retrying) return;
     retrying = true;
-    void source
-      .reconnect()
+    // Automatic retries join initialization shared by other subscribers.
+    const pending = force ? source.reconnect() : source.ready();
+    void pending
       .catch((error: unknown) => {
         retrying = false;
         failed(error);
@@ -46,7 +53,7 @@ export function subscribeSettings(
     update(state);
   }, failed);
   return {
-    retry,
+    retry: () => connect(true),
     dispose() {
       active = false;
       clearTimeout(timer);

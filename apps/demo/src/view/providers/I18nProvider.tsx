@@ -1,11 +1,10 @@
+import { subscribeIpcState } from "@electron-spark/ipc/renderer";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IntlProvider } from "react-intl";
 
-import type { Settings } from "../../main/settings.ts";
 import { en } from "../messages/en";
 import { fr } from "../messages/fr";
-import { settings } from "../preload";
-import { subscribeSettings } from "./settingsSubscription";
+import { type Settings, settings } from "../preload";
 
 const messages = { en, fr } satisfies Record<Settings["locale"], Record<keyof typeof en, string>>;
 
@@ -16,14 +15,14 @@ export const I18nProvider = ({ children }: { children: ReactNode }): ReactNode =
   const retry = useRef<() => void>(() => {});
 
   useEffect(() => {
-    const subscription = subscribeSettings(
-      settings.state,
-      (state) => {
+    const subscription = subscribeIpcState({
+      source: settings.state,
+      update: (state) => {
         setLocale(state.locale);
         setFailed(false);
       },
-      () => setFailed(true),
-    );
+      onError: () => setFailed(true),
+    });
     retry.current = subscription.retry;
     return () => subscription.dispose();
   }, []);

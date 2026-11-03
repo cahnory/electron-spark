@@ -1,13 +1,12 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 import {
-  createIpcApiBridge,
-  createIpcApiClient,
   createIpcApiServer,
   createIpcState,
   defineIpcAction,
   type IpcRendererTransport,
 } from "../src/index.ts";
+import { createIpcApiBridge, createIpcApiClient } from "../src/renderer.ts";
 
 declare const renderer: IpcRendererTransport;
 declare const params: StandardSchemaV1<[left: number, right: number]>;

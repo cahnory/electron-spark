@@ -10,6 +10,8 @@ export const settings = {
   }),
 };
 
+export { type Settings };
+
 window.addEventListener("unload", () => {
   void settings.state.dispose();
 });

@@ -6,8 +6,11 @@ runtime dependency. All incoming action arguments require a Standard Schema
 validator (for example Zod or Valibot).
 
 Use `@electron-spark/ipc/main` in main and `@electron-spark/ipc/renderer` in
-preload. The renderer entry has no Node built-in imports and can be bundled into
-a sandboxed preload. The root entry includes main APIs and therefore imports
+preload and renderer views. Renderer runtime APIs (`createIpcApiBridge`,
+`createIpcApiClient`, `createIpcStateBridge`, `createIpcRendererBridge`,
+`createIpcEventBridge`, and `subscribeIpcState`) are exported only from `/renderer`.
+The renderer entry has no Node built-in imports and can be bundled into
+a sandboxed preload. The root entry retains shared types and main APIs and therefore imports
 `node:async_hooks`; do not bundle it into a sandboxed preload. Import application
 action types with `import type` so main implementations stay in main.
 
@@ -334,3 +337,29 @@ Pass `access.authorize` directly to preserve its `onRevoke` notification hook;
 custom authorization wrappers must forward that hook to retain immediate
 revocation. Application code owns window selection and process shutdown;
 storage adapters own file paths, defaults, and migrations.
+
+## Reconnecting state subscriptions
+
+`subscribeIpcState` from `@electron-spark/ipc/renderer` subscribes to a state
+bridge and retries connection failures with exponential backoff, starting at
+1 second and capped at 30 seconds. A successful update resets the delay.
+Automatic retries share any connection attempt already underway on the bridge.
+Calling `retry()` explicitly starts a fresh connection.
+
+```ts
+import { subscribeIpcState } from "@electron-spark/ipc/renderer";
+
+const subscription = subscribeIpcState({
+  source: window.count,
+  update: renderCount,
+  onError: reportError,
+});
+// Retry immediately after restoring the service or permission:
+subscription.retry();
+// On component cleanup:
+subscription.dispose();
+```
+
+Disposal cancels retries and unsubscribes without disposing the shared bridge.
+The optional `onError` callback reports failures. Set `retryMs` in the options
+object to customize the initial retry delay in milliseconds (default: 1000).
