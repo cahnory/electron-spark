@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, writeFile, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 
 import type { InlineConfig, ViteDevServer, Plugin } from "vite";
 import {
@@ -58,6 +60,12 @@ async function waitFor(fn: () => unknown, attempts = 100): Promise<void> {
 const alive = (pid: number) => {
   try {
     process.kill(pid, 0);
+    if (process.platform !== "win32") {
+      // An orphaned worker may await reaping by init after it has stopped.
+      return !execFileSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" })
+        .trim()
+        .startsWith("Z");
+    }
     return true;
   } catch {
     return false;
@@ -75,8 +83,14 @@ for (const fromFile of [false, true]) {
       );
       await writeFile(`${root}/node_modules/electron/index.cjs`, "module.exports=process.execPath");
       await writeFile(
+        `${root}/worker.cjs`,
+        `require('node:fs').appendFileSync(${JSON.stringify(root + "/workers")}, process.pid+','); process.send('ready'); setInterval(()=>{},1000);`,
+      );
+      await writeFile(
         `${root}/main.js`,
-        `import fs from 'node:fs'; fs.appendFileSync(${JSON.stringify(root + "/pids")}, process.pid+',');setInterval(()=>{},1000);`,
+        `import fs from 'node:fs'; import { fork } from 'node:child_process';
+        fork(${JSON.stringify(root + "/worker.cjs")}).once('message', () => fs.appendFileSync(${JSON.stringify(root + "/pids")}, process.pid+','));
+        setInterval(()=>{},1000);`,
       );
       if (fromFile) {
         await writeFile(
@@ -96,11 +110,18 @@ for (const fromFile of [false, true]) {
           return [];
         }
       };
+      const workers = async () => {
+        try {
+          return (await readFile(`${root}/workers`, "utf8")).split(",").filter(Boolean).map(Number);
+        } catch {
+          return [];
+        }
+      };
       let server: ViteDevServer | undefined;
       try {
         server = await createServer({
           configFile: fromFile ? `${root}/vite.config.mjs` : false,
-          configLoader: "native",
+          configLoader: fromFile ? "bundle" : "native",
           root,
           logLevel: "silent" as const,
           server: { middlewareMode: true, ws: false },
@@ -154,6 +175,7 @@ for (const fromFile of [false, true]) {
         await server.restart();
         await waitFor(() => launcher);
         assert(!alive(first), "old child must exit on restart");
+        await waitFor(async () => !alive((await workers())[0]));
         assert.equal(closes, 1);
         await waitFor(async () => (await pids()).length === 2);
         const second = (await pids())[1];
@@ -166,6 +188,7 @@ for (const fromFile of [false, true]) {
         await writeFile(`${root}/main.js`, source + "\n// rebuild");
         await waitFor(async () => (await pids()).length === 3);
         assert(!alive(second), "rebuild must stop previous child");
+        await waitFor(async () => !alive((await workers())[1]));
         const third = (await pids())[2];
         assert(alive(third));
         launcher = undefined;
@@ -191,11 +214,13 @@ for (const fromFile of [false, true]) {
         server = undefined;
         assert(!alive(third), "close must stop current child");
         assert(!alive(recovered), "final close must stop the recovered child");
+        await waitFor(async () => (await workers()).every((pid) => !alive(pid)));
         assert.equal(closes, 3);
       } finally {
         await server?.close();
         await failedServer?.close();
         for (const pid of await pids()) if (alive(pid)) process.kill(pid, "SIGKILL");
+        for (const pid of await workers()) if (alive(pid)) process.kill(pid, "SIGKILL");
         await rm(root, { recursive: true, force: true });
       }
     });
@@ -298,6 +323,7 @@ void test(
     let gate = Promise.withResolvers<void>();
     let entered = Promise.withResolvers<void>();
     const errors: string[] = [];
+    const writtenEntries: string[] = [];
     const launches = async () => {
       try {
         return (await readFile(`${root}/launches`, "utf8"))
@@ -346,6 +372,16 @@ void test(
           },
         },
         plugins: [
+          {
+            name: "record-output-order",
+            writeBundle(options, bundle) {
+              for (const output of Object.values(bundle)) {
+                if (output.type === "chunk" && output.isEntry) {
+                  writtenEntries.push(path.resolve(options.dir!, output.fileName));
+                }
+              }
+            },
+          },
           ...electronMain(),
           {
             name: "hold-second-output",
@@ -366,7 +402,9 @@ void test(
       await waitFor(async () => (await launches()).length === 1);
       const [first] = await launches();
       assert.equal(first.ready, true);
-      assert.match(first.entry, /first\.mjs$/);
+      // Outputs can finish in either order; the launcher uses the first written entry.
+      assert.equal(writtenEntries.length, 2);
+      assert.equal(first.entry, pathToFileURL(writtenEntries[0]).href);
 
       failOutput = true;
       await writeFile(`${root}/main.js`, source + "\n// failed rebuild");

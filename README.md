@@ -11,10 +11,10 @@ Electron and Vite. It brings together development tooling, typed communication
 between processes, persistent state, and packaging safeguards so you can focus
 on what your application does.
 
-Use the individual `@electron-spark/*` packages in your Electron project, with
-`apps/demo` as an example of how to put them together. This workspace is the
-Electron Spark development project. Your application owns its interface,
-features, and integrations.
+Start a new app from the [Electron Spark boilerplate](https://github.com/cahnory/electron-spark-boilerplate),
+or use the individual `@electron-spark/*` packages in your existing Electron
+project. This workspace is the Electron Spark development project. Your
+application owns its interface, features, and integrations.
 
 ## What you can build on
 
@@ -34,6 +34,24 @@ internationalization can fit together. These are starting points you can extend
 or replace to suit your product.
 
 ## Get started
+
+To create an app, clone the [Electron Spark boilerplate](https://github.com/cahnory/electron-spark-boilerplate).
+It includes Electron Spark, React, and TypeScript, with typed IPC, persistent
+settings, and packaging configuration already wired up.
+
+Use Node.js 24 or later and pnpm:
+
+```sh
+git clone https://github.com/cahnory/electron-spark-boilerplate.git my-app
+cd my-app
+pnpm install
+pnpm dev
+```
+
+Follow the boilerplate's [customization guide](https://github.com/cahnory/electron-spark-boilerplate#make-it-yours)
+to set your application identity and replace the example interface and settings.
+
+### Add packages to an existing app
 
 In your Electron project, install only the packages you need:
 

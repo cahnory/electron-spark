@@ -1,10 +1,11 @@
-import { spawn, type ChildProcess } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
 import { buildOnServe } from "@electron-spark/vite-plugin-build-on-serve";
 import type { Plugin, ViteDevServer } from "vite";
+
+import { launchElectron } from "./process.ts";
 
 /** Build and restart only the configured Electron main environment in dev. */
 export function electronMain(environmentName = "electron"): Plugin[] {
@@ -34,23 +35,15 @@ function createSession(server: ViteDevServer) {
   const electronPath: string = require("electron");
   // macOS uses the launched bundle's identity for the Dock and app switcher.
   const executable = process.platform === "darwin" ? realpathSync(electronPath) : electronPath;
-  let child: ChildProcess | undefined;
+  let child: ReturnType<typeof launchElectron> | undefined;
   let closed = false;
   let pending = Promise.resolve();
   let entry: string | undefined;
 
   async function stop() {
     const previous = child;
-    child = undefined;
-    if (!previous?.pid || previous.exitCode !== null || previous.signalCode !== null) return;
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => previous.kill("SIGKILL"), 3000);
-      previous.once("exit", () => {
-        clearTimeout(timeout);
-        resolve();
-      });
-      previous.kill("SIGTERM");
-    });
+    await previous?.stop();
+    if (child === previous) child = undefined;
   }
 
   return {
@@ -71,8 +64,9 @@ function createSession(server: ViteDevServer) {
           if (closed) return;
           const env = { ...process.env };
           delete env.ELECTRON_RUN_AS_NODE;
-          child = spawn(executable, [builtEntry], { stdio: "inherit", env });
-          child.on("error", (error) => server.config.logger.error(error.message));
+          child = launchElectron(executable, builtEntry, env, (error) =>
+            server.config.logger.error(String(error)),
+          );
         })
         .catch((error: unknown) => {
           server.config.logger.error(String(error));
