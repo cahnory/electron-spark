@@ -1,5 +1,11 @@
 # @electron-spark/vite-plugin-electron-app-identity
 
+## 0.2.1
+
+### Patch Changes
+
+- 8040289: Publish a maintenance release through GitHub Actions to validate npm trusted publishing.
+
 ## 0.2.0
 
 ### Minor Changes
