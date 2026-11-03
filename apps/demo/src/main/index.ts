@@ -35,11 +35,11 @@ const configureUserDataPath = (): void => {
 };
 
 const registerAppLifecycle = (): void => {
-  if (!IS_MAC_OS) {
-    app.on("window-all-closed", () => {
+  app.on("window-all-closed", () => {
+    if (!IS_MAC_OS) {
       app.quit();
-    });
-  }
+    }
+  });
 
   app.on("will-quit", () => {
     // close any listeners or connections

@@ -39,6 +39,7 @@ class BrowserWindow extends EventEmitter {
   async loadFile() {}
 }
 const app = Object.assign(new EventEmitter(), {
+  quit: mock.fn(),
   requestSingleInstanceLock: () => true,
   whenReady: async () => {},
   setAppUserModelId() {},
@@ -63,6 +64,10 @@ void test("activation reopens a closed window and grants settings access", async
   assert.equal(windows.length, 1);
   assert.equal(provided.length, 1);
   windows[0].destroyed = true;
+  // Electron quits by default when no window-all-closed listener is registered.
+  assert.ok(app.listenerCount("window-all-closed") > 0);
+  app.emit("window-all-closed");
+  assert.equal(app.quit.mock.callCount(), process.platform === "darwin" ? 0 : 1);
   app.emit("activate");
   assert.equal(windows.length, 2);
   assert.equal(provided.length, 2);
