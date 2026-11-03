@@ -135,12 +135,13 @@ renderer.renderers["panels/help"].window.webPreferences;
     { cwd: root, encoding: "utf8" },
   );
 }
-async function until(fn: () => unknown) {
+async function until<T>(fn: () => T | Promise<T>): Promise<T> {
   let lastError: unknown;
   const deadline = performance.now() + 15_000;
-  const attempt = async () => {
+  const attempt = async (): Promise<T> => {
     try {
-      if (await fn()) return;
+      const result = await fn();
+      if (result) return result;
     } catch (error) {
       lastError = error;
     }
@@ -200,7 +201,8 @@ for (const fromFile of [false, true])
     server.httpServer!.emit("listening");
     await until(async () => (await data(root)).mode === "serve");
     if (!fromFile) await checkRendererTypes(root);
-    const result = await data(root);
+    // A watched rebuild can briefly remove the entry between reads.
+    const result = await until(() => data(root));
     assert.equal("publicPath" in result, false);
     assert.equal(
       result.renderers["screens/settings"].url,
@@ -219,7 +221,7 @@ for (const fromFile of [false, true])
         (await data(root)).renderers["screens/settings"].window.webPreferences.preload !==
         result.renderers["screens/settings"].window.webPreferences.preload,
     );
-    assert.equal((await data(root)).mode, "serve");
+    await until(async () => (await data(root)).mode === "serve");
     await writeFile(
       `${root}/screens/settings/window.json`,
       JSON.stringify({
@@ -839,8 +841,8 @@ void test("manifest stays identical across build, serve, ports and hashed asset 
       server.httpServer!.emit("listening");
       await until(async () => (await data(root)).mode === "serve");
       assert.equal(await manifest(), original);
-      const previous = (await data(root)).renderers["screens/settings"].window.webPreferences
-        .preload;
+      const previous = (await until(() => data(root))).renderers["screens/settings"].window
+        .webPreferences.preload;
       await writeFile(`${root}/screens/settings/bridge.js`, `console.log(${port})`);
       await until(
         async () =>
