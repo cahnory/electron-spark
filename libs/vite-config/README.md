@@ -57,12 +57,24 @@ caller's responsibility.
 
 Exported types: `ElectronConfigOptions`, `ConfigOverride`, and `PreloadContext`.
 
-## Main-process dependencies
+## Dependency policy
+
+Views/renderers bundle browser-compatible dependencies. Each preload also bundles
+its dependencies into a self-contained CommonJS file, with Electron and Node
+built-ins left external. Bundling does not make unavailable Node APIs usable in a
+sandboxed preload or renderer.
 
 Main builds externalize packages declared in the application's `dependencies`
 and `optionalDependencies`, including package subpaths. Other imports remain
 bundled by default. Electron remains external regardless of its devDependency
-status. Renderer and preload dependency policies are unchanged.
+status. Application source and relative imports are bundled.
+
+Keep runtime packages in `dependencies`, including packages used by views and
+preloads. Build tools, type packages, and Electron itself belong in
+`devDependencies`. A package used in both main and renderer can be shipped both
+as an external package and inside the renderer bundle. Packaging all production
+dependencies can also include unused copies of renderer-only packages; optimize
+that separately if needed.
 
 The manifest is read from `projectDir`. Include external runtime dependencies in
 packaged applications; native modules also need binaries compatible with Electron.
@@ -82,8 +94,8 @@ Vite/Rolldown external settings still apply. Exclusions leave packages subject t
 those settings.
 
 Use `externalDeps: false` for applications that ship only bundled output. The demo
-ships external main dependencies through electron-builder and lists bundled
-workspace and renderer packages in `devDependencies` to avoid duplicate copies.
+ships external main dependencies through electron-builder and explicitly excludes
+workspace source packages from externalization so they remain bundled.
 
 Main ESM chunks also receive module-local `require`, `__filename`, and `__dirname`
 bindings. Set `esmShim: false` to disable them. Paths refer to emitted chunks;

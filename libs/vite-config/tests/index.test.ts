@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, rm, symlink } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
@@ -135,7 +135,6 @@ await test("emits nested resources unchanged only in the main output", async (t)
     logLevel: "silent",
   });
   await builder.build(builder.environments.electron);
-  const { readFile } = await import("node:fs/promises");
   assert.deepEqual(
     await readFile(path.join(projectDir, "dist/main/resources/data/example.bin")),
     content,
@@ -225,10 +224,61 @@ await test("main compatibility plugins can be disabled", async (t) => {
   const config = defineElectronConfig({ projectDir, externalDeps: false, esmShim: false })(context);
   const builder = await createBuilder({ ...config, configFile: false, logLevel: "silent" });
   await builder.build(builder.environments.electron);
-  const { readFile } = await import("node:fs/promises");
   const code = await readFile(path.join(projectDir, "dist/main/index.js"), "utf8");
   assert.doesNotMatch(code, /createRequire|fileURLToPath/);
   assert.match(code, /__dirname/);
+});
+
+await test("runtime dependencies are external in main and bundled in views and preloads", async (t) => {
+  const projectDir = await fixture(t);
+  const dependencyDir = path.join(projectDir, "node_modules/runtime");
+  await mkdir(dependencyDir, { recursive: true });
+  await mkdir(path.join(projectDir, "src/main"));
+  await writeFile(
+    path.join(projectDir, "package.json"),
+    JSON.stringify({ type: "module", dependencies: { runtime: "1" } }),
+  );
+  await writeFile(
+    path.join(dependencyDir, "package.json"),
+    JSON.stringify({ name: "runtime", type: "module", exports: "./index.js" }),
+  );
+  await writeFile(
+    path.join(dependencyDir, "index.js"),
+    `export const value = 'runtime-dependency-marker';`,
+  );
+  const source = `import { value } from 'runtime'; console.log(value);`;
+  await writeFile(path.join(projectDir, "src/main/index.ts"), source);
+  await writeFile(path.join(projectDir, "src/view/preload.ts"), source);
+  await writeFile(path.join(projectDir, "src/view/index.ts"), source);
+  await writeFile(
+    path.join(projectDir, "src/view/index.html"),
+    '<html><script type="module" src="./index.ts"></script></html>',
+  );
+  const builder = await createBuilder({
+    ...defineElectronConfig({ projectDir })(context),
+    configFile: false,
+    logLevel: "silent",
+  });
+  await builder.build(builder.environments.client);
+  await builder.build(builder.environments.electron);
+  await builder.build(builder.environments.preload0);
+  const main = await readFile(path.join(projectDir, "dist/main/index.js"), "utf8");
+  assert.match(main, /from ["']runtime["']/);
+  assert.doesNotMatch(main, /runtime-dependency-marker/);
+  await rm(path.join(projectDir, "node_modules"), { recursive: true });
+  const preload = await readFile(path.join(projectDir, "dist/preload/view/preload.cjs"), "utf8");
+  const assetsDir = path.join(projectDir, "dist/assets");
+  const renderer = (
+    await Promise.all(
+      (await readdir(assetsDir))
+        .filter((name) => name.endsWith(".js"))
+        .map((name) => readFile(path.join(assetsDir, name), "utf8")),
+    )
+  ).join("\n");
+  for (const output of [preload, renderer]) {
+    assert.match(output, /runtime-dependency-marker/);
+    assert.doesNotMatch(output, /(?:from\s*|require\s*\(\s*)["']runtime["']/);
+  }
 });
 
 await test("bundled main dependencies run without node_modules", async (t) => {
