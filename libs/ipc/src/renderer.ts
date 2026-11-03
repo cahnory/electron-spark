@@ -12,3 +12,4 @@ export { defineIpcAction } from "./action.ts";
 export type { IpcData } from "./data.ts";
 export type { IpcRendererTransport } from "./transport.ts";
 export type { IpcValidator, IpcAction } from "./action.ts";
+export { subscribeIpcState } from "./stateSubscription.ts";

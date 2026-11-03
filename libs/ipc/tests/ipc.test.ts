@@ -15,15 +15,17 @@ import {
   createIpcService,
   defineIpcAction,
   createIpcApiServer,
-  createIpcApiBridge,
   createIpcState,
-  createIpcStateBridge,
   createIpcRendererServer,
-  createIpcRendererBridge,
   createIpcEventSender,
-  createIpcEventBridge,
 } from "../src/index.ts";
 import { getIpcContext } from "../src/main.ts";
+import {
+  createIpcApiBridge,
+  createIpcStateBridge,
+  createIpcRendererBridge,
+  createIpcEventBridge,
+} from "../src/renderer.ts";
 import { readResponse } from "../src/response.ts";
 import type {
   IpcMainTransport,
