@@ -174,3 +174,101 @@ await test("rejects resources directory symlinks, including dangling links", asy
     /Resource symlinks are unsupported/,
   );
 });
+
+await test("main defaults preserve runtime package paths and shim bundled CommonJS", async (t) => {
+  const projectDir = await fixture(t);
+  const driverDir = path.join(projectDir, "node_modules/test-driver");
+  await mkdir(driverDir, { recursive: true });
+  await mkdir(path.join(projectDir, "src/main"));
+  await writeFile(
+    path.join(projectDir, "package.json"),
+    JSON.stringify({ type: "module", dependencies: { "test-driver": "1.0.0" } }),
+  );
+  await writeFile(
+    path.join(driverDir, "package.json"),
+    JSON.stringify({ name: "test-driver", exports: { "./binding": "./index.cjs" } }),
+  );
+  await writeFile(
+    path.join(driverDir, "index.cjs"),
+    `module.exports = require('node:fs').readFileSync(require('node:path').join(__dirname, 'binding.txt'), 'utf8');`,
+  );
+  await writeFile(path.join(driverDir, "binding.txt"), "package-relative binding");
+  await writeFile(
+    path.join(projectDir, "src/main/helper.cjs"),
+    `module.exports = { directory: __dirname, filename: __filename, separator: require('node:path').sep };`,
+  );
+  await writeFile(
+    path.join(projectDir, "src/main/index.ts"),
+    `import driver from 'test-driver/binding'; import helper from './helper.cjs'; export { driver, helper };`,
+  );
+  const builder = await createBuilder({
+    ...defineElectronConfig({ projectDir })(context),
+    configFile: false,
+    logLevel: "silent",
+  });
+  await builder.build(builder.environments.electron);
+  const { pathToFileURL } = await import("node:url");
+  const { realpath } = await import("node:fs/promises");
+  const filename = await realpath(path.join(projectDir, "dist/main/index.js"));
+  const result = await import(pathToFileURL(filename).href);
+  assert.equal(result.driver, "package-relative binding");
+  assert.equal(result.helper.directory, path.dirname(filename));
+  assert.equal(result.helper.filename, filename);
+  assert.equal(result.helper.separator, path.sep);
+});
+
+await test("main compatibility plugins can be disabled", async (t) => {
+  const projectDir = await fixture(t);
+  await writeFile(path.join(projectDir, "package.json"), '{"type":"module"}');
+  await mkdir(path.join(projectDir, "src/main"));
+  await writeFile(path.join(projectDir, "src/main/index.ts"), "console.log(__dirname);");
+  const config = defineElectronConfig({ projectDir, externalDeps: false, esmShim: false })(context);
+  const builder = await createBuilder({ ...config, configFile: false, logLevel: "silent" });
+  await builder.build(builder.environments.electron);
+  const { readFile } = await import("node:fs/promises");
+  const code = await readFile(path.join(projectDir, "dist/main/index.js"), "utf8");
+  assert.doesNotMatch(code, /createRequire|fileURLToPath/);
+  assert.match(code, /__dirname/);
+});
+
+await test("bundled main dependencies run without node_modules", async (t) => {
+  const projectDir = await fixture(t);
+  await writeFile(
+    path.join(projectDir, "package.json"),
+    JSON.stringify({ type: "module", dependencies: { runtime: "1" } }),
+  );
+  await Promise.all(
+    ["runtime", "transitive"].map(async (name) => {
+      const dir = path.join(projectDir, "node_modules", name);
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        path.join(dir, "package.json"),
+        JSON.stringify({ name, type: "module", exports: { "./value": "./index.js" } }),
+      );
+      await writeFile(
+        path.join(dir, "index.js"),
+        name === "runtime"
+          ? `export { value } from 'transitive/value';`
+          : `export const value = 'bundled dependency';`,
+      );
+    }),
+  );
+  await mkdir(path.join(projectDir, "src/main"));
+  await writeFile(
+    path.join(projectDir, "src/main/index.ts"),
+    `export { value } from 'runtime/value'; export const directory = __dirname;`,
+  );
+  const builder = await createBuilder({
+    ...defineElectronConfig({ projectDir, externalDeps: false })(context),
+    configFile: false,
+    logLevel: "silent",
+  });
+  await builder.build(builder.environments.electron);
+  await rm(path.join(projectDir, "node_modules"), { recursive: true });
+  const { pathToFileURL } = await import("node:url");
+  const { realpath } = await import("node:fs/promises");
+  const filename = await realpath(path.join(projectDir, "dist/main/index.js"));
+  const result = await import(pathToFileURL(filename).href);
+  assert.equal(result.value, "bundled dependency");
+  assert.equal(result.directory, path.dirname(filename));
+});

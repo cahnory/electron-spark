@@ -56,3 +56,37 @@ caller's responsibility.
 | `debug`                | `false`                   | Print the final customized configuration            |
 
 Exported types: `ElectronConfigOptions`, `ConfigOverride`, and `PreloadContext`.
+
+## Main-process dependencies
+
+Main builds externalize packages declared in the application's `dependencies`
+and `optionalDependencies`, including package subpaths. Other imports remain
+bundled by default. Electron remains external regardless of its devDependency
+status. Renderer and preload dependency policies are unchanged.
+
+The manifest is read from `projectDir`. Include external runtime dependencies in
+packaged applications; native modules also need binaries compatible with Electron.
+For workspace packages exposing TypeScript source, opt into bundling:
+
+```ts
+export default defineElectronConfig({
+  externalDeps: {
+    exclude: ["my-workspace-package"],
+    include: ["additional-runtime-package"],
+  },
+});
+```
+
+Set `externalDeps: false` to restore bundling of dependencies. Existing explicit
+Vite/Rolldown external settings still apply. Exclusions leave packages subject to
+those settings.
+
+Use `externalDeps: false` for applications that ship only bundled output. The demo
+ships external main dependencies through electron-builder and lists bundled
+workspace and renderer packages in `devDependencies` to avoid duplicate copies.
+
+Main ESM chunks also receive module-local `require`, `__filename`, and `__dirname`
+bindings. Set `esmShim: false` to disable them. Paths refer to emitted chunks;
+this does not make bundled native loaders or package-relative assets portable.
+The standalone `@electron-spark/vite-plugin-external-deps` and
+`@electron-spark/vite-plugin-esm-shim` packages can be used in custom Vite configs.

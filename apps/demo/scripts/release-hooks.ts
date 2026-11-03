@@ -7,5 +7,6 @@ export {
 } from "@electron-spark/electron-builder-verification";
 
 export const afterPack = createPackageVerifier({
+  dependencyPackages: "auto",
   requiredEntries: ["dist/main/index.js", "dist/view/index.html"],
 });

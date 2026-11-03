@@ -77,6 +77,8 @@ pnpm --filter @electron-spark/demo dev
 | [Store](libs/store/README.md)                                              | Storage adapters, schema validation, and versioned persistence.              |
 | [Vite config](libs/vite-config/README.md)                                  | Shared configuration for main, preload, and renderer builds.                 |
 | [Renderer plugin](libs/vite-plugin-electron-renderer/README.md)            | Renderer discovery, window configuration, and generated manifests.           |
+| [ESM shim plugin](libs/vite-plugin-esm-shim/README.md)                     | Supply CommonJS convenience bindings in Node ESM output.                     |
+| [External dependencies plugin](libs/vite-plugin-external-deps/README.md)   | Preserve runtime dependency package layouts outside server bundles.          |
 | `@electron-spark/vite-plugin-electron-main`                                | Build and launch the Electron main process.                                  |
 | `@electron-spark/vite-plugin-electron-preload`                             | Build preload scripts and expose APIs to renderers.                          |
 | `@electron-spark/vite-plugin-build-on-serve`                               | Run watched builds alongside the development server.                         |
@@ -168,12 +170,16 @@ For macOS notarization, provide one of these credential sets:
 - `APPLE_API_KEY`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`;
 - `APPLE_KEYCHAIN_PROFILE` and optionally `APPLE_KEYCHAIN`.
 
-Main and preload dependencies are bundled. Packaging excludes `node_modules`,
-TypeScript sources, and source maps. A hook also inspects the actual contents of
-`app.asar` and rejects files outside `dist`, unexpected extensions, hidden files,
-identifiable secret files, and unpacked files. Adding native modules or new
-resource types requires an explicit adjustment to this policy and verification
-of the final artifact.
+Main runtime dependencies are externalized and included by electron-builder.
+The demo keeps `zod` in production dependencies; bundled workspace packages and
+renderer dependencies are development dependencies to avoid shipping duplicate
+copies. Preload dependencies remain bundled.
+
+Packaging excludes TypeScript sources, source maps, and environment files. The
+package verifier allows `dist` assets and derives runtime packages from the
+packaged production dependency graph (`dependencyPackages: "auto"`). It rejects unexpected packages, hidden files,
+credential paths, and ASAR links. Unpacked dependency files must match the archive
+metadata exactly. Declare runtime packages in `dependencies` and validate native binaries for Electron's ABI and target platform.
 
 Files in `src/resources` are copied to `dist/main/resources` in development and
 production, then included in ASAR. Main can read them through `RESOURCES_PATH`

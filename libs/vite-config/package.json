@@ -45,7 +45,9 @@
   "dependencies": {
     "@electron-spark/vite-plugin-electron-main": "workspace:*",
     "@electron-spark/vite-plugin-electron-preload": "workspace:*",
-    "@electron-spark/vite-plugin-electron-renderer": "workspace:*"
+    "@electron-spark/vite-plugin-electron-renderer": "workspace:*",
+    "@electron-spark/vite-plugin-esm-shim": "workspace:*",
+    "@electron-spark/vite-plugin-external-deps": "workspace:*"
   },
   "devDependencies": {
     "electron": "^45.0.0",

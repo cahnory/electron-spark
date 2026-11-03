@@ -22,11 +22,46 @@ void test("demo hooks retain the required main and renderer entries", async (t) 
   await mkdir(path.join(root, "resources"));
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Only these fields are read on Linux.
   const context = { electronPlatformName: "linux", appOutDir: root } as AfterPackContext;
-  const writeArchive = async (includeView: boolean) => {
+  const writeArchive = async (
+    includeView: boolean,
+    includeDependency = true,
+    includeUnexpected = false,
+  ) => {
+    const manifest = Buffer.from(JSON.stringify({ dependencies: { zod: "4.6.7" } }));
+    const dependency = Buffer.from("{}");
     const header = Buffer.from(
       JSON.stringify({
         files: {
-          "package.json": {},
+          "package.json": { offset: "0", size: manifest.length },
+          ...(includeDependency
+            ? {
+                node_modules: {
+                  files: {
+                    ...(includeUnexpected
+                      ? {
+                          unexpected: {
+                            files: {
+                              "package.json": {
+                                offset: String(manifest.length),
+                                size: dependency.length,
+                              },
+                            },
+                          },
+                        }
+                      : {}),
+                    zod: {
+                      files: {
+                        "package.json": {
+                          offset: String(manifest.length),
+                          size: dependency.length,
+                        },
+                        "index.js": {},
+                      },
+                    },
+                  },
+                },
+              }
+            : {}),
           dist: {
             files: {
               main: { files: { "index.js": {} } },
@@ -37,11 +72,22 @@ void test("demo hooks retain the required main and renderer entries", async (t) 
       }),
     );
     const prefix = Buffer.alloc(16);
+    prefix.writeUInt32LE(8 + header.length, 4);
     prefix.writeUInt32LE(header.length, 12);
-    await writeFile(path.join(root, "resources/app.asar"), Buffer.concat([prefix, header]));
+    await writeFile(
+      path.join(root, "resources/app.asar"),
+      Buffer.concat([prefix, header, manifest, dependency]),
+    );
   };
   await writeArchive(true);
   await afterPack(context);
   await writeArchive(false);
   await assert.rejects(afterPack(context), /Missing packaged entry: dist\/view\/index.html/);
+  await writeArchive(true, false);
+  await assert.rejects(afterPack(context), /Missing packaged dependency: zod/);
+  await writeArchive(true, true, true);
+  await assert.rejects(
+    afterPack(context),
+    /Unexpected packaged dependency: node_modules\/unexpected/,
+  );
 });
