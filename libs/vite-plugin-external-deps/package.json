@@ -1,0 +1,52 @@
+{
+  "name": "@electron-spark/vite-plugin-external-deps",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": {
+    "name": "François Germain (Cahnory)",
+    "email": "cahnory@gmail.com",
+    "url": "https://github.com/cahnory"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cahnory/electron-spark.git",
+    "directory": "libs/vite-plugin-external-deps"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "require": "./dist/index.cjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "check": "concurrently --names format,lint,test,types --group \"pnpm check:format\" \"pnpm check:lint\" \"pnpm check:test\" \"pnpm check:types\"",
+    "check:format": "oxfmt --check .",
+    "check:lint": "oxlint --deny-warnings .",
+    "check:test": "node --test --test-reporter=../../scripts/test-reporter.ts tests/*.test.ts",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm check:test"
+  },
+  "devDependencies": {
+    "tsdown": "^0.23.2",
+    "vite": "^8.3.5"
+  },
+  "peerDependencies": {
+    "vite": "^8.3.5"
+  }
+}

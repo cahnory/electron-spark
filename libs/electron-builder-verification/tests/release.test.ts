@@ -131,3 +131,109 @@ void test("asset policy supports other app layouts without permitting source or 
     );
   }
 });
+
+void test("dependency policy permits reviewed packages and rejects unexpected or unsafe files", () => {
+  const policy = { dependencyPackages: ["zod", "@test/native", "helper"] };
+  const entries = [
+    ...required,
+    "node_modules/zod/package.json",
+    "node_modules/zod/v4/index.cjs",
+    "node_modules/zod/LICENSE",
+    "node_modules/@test/native/package.json",
+    "node_modules/@test/native/build/addon.node",
+    "node_modules/@test/native/node_modules/helper/package.json",
+    "node_modules/@test/native/node_modules/helper/data.bin",
+  ];
+  assert.doesNotThrow(() => verifyPolicyEntries(entries, policy));
+  assert.throws(() => verifyPolicyEntries(required, policy), /Missing packaged dependency/);
+  assert.throws(
+    () => verifyPolicyEntries([...required, "dist/node_modules/zod/package.json"], policy),
+    /Missing packaged dependency/,
+  );
+  for (const file of [
+    "node_modules/other/index.js",
+    "node_modules/zod/node_modules/other/index.js",
+    "node_modules/zod/../other/index.js",
+    "node_modules/zod/.env",
+    "node_modules/zod/private.pem",
+    "node_modules/zod/source.ts",
+    "node_modules/zod/index.d.cts",
+    "node_modules/zod/index.js.map",
+    "node_modules/zod/credentials.json",
+    "node_modules/zod/lib/node_modules/other/index.js",
+  ]) {
+    assert.throws(
+      () => verifyPolicyEntries([...entries, file], policy),
+      /Unexpected packaged file/,
+    );
+  }
+});
+
+void test("unpacked dependencies must match archive entries and cannot contain symlinks", async (t) => {
+  const { mkdtemp, mkdir, writeFile, rm, symlink } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const { verifyResources } = await import("../src/verify-package.ts");
+  const root = await mkdtemp(path.join(tmpdir(), "unpacked-dependencies-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(path.join(root, "app.asar"), "");
+  const directory = path.join(root, "app.asar.unpacked/node_modules/native");
+  await mkdir(directory, { recursive: true });
+  const file = path.join(directory, "addon.node");
+  const entries = ["node_modules/native/addon.node"];
+  await assert.rejects(verifyResources(root, false, entries), /Missing unpacked file/);
+  await writeFile(file, "native binary");
+  await verifyResources(root, false, entries);
+  await assert.rejects(verifyResources(root, false), /Unexpected release resource/);
+  await writeFile(path.join(directory, "extra.json"), "{}");
+  await assert.rejects(verifyResources(root, false, entries), /Unexpected unpacked file/);
+  await rm(path.join(directory, "extra.json"));
+  await rm(file);
+  await symlink(path.join(root, "app.asar"), file);
+  await assert.rejects(verifyResources(root, false, entries), /Unexpected unpacked file/);
+});
+
+void test("package verifier checks unpacked dependencies against ASAR metadata", async (t) => {
+  const { mkdtemp, mkdir, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const { createPackageVerifier } = await import("../src/verify-package.ts");
+  const root = await mkdtemp(path.join(tmpdir(), "dependency-archive-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const resources = path.join(root, "resources");
+  const native = path.join(resources, "app.asar.unpacked/node_modules/native");
+  await mkdir(native, { recursive: true });
+  await writeFile(path.join(native, "addon.node"), "native binary");
+  await writeFile(path.join(native, "package.json"), "{}");
+  const manifest = Buffer.from(JSON.stringify({ dependencies: { native: "1" } }));
+  const header = Buffer.from(
+    JSON.stringify({
+      files: {
+        "package.json": { offset: "0", size: manifest.length },
+        node_modules: {
+          files: {
+            native: {
+              unpacked: true,
+              files: {
+                "package.json": { unpacked: true },
+                "addon.node": { unpacked: true },
+              },
+            },
+          },
+        },
+      },
+    }),
+  );
+  const prefix = Buffer.alloc(16);
+  prefix.writeUInt32LE(8 + header.length, 4);
+  prefix.writeUInt32LE(header.length, 12);
+  await writeFile(path.join(resources, "app.asar"), Buffer.concat([prefix, header, manifest]));
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Linux verification only reads these fields.
+  const context = { electronPlatformName: "linux", appOutDir: root } as AfterPackContext;
+  const verify = createPackageVerifier({ dependencyPackages: ["native"] });
+  await verify(context);
+  await createPackageVerifier({ dependencyPackages: "auto" })(context);
+  await assert.rejects(createPackageVerifier()(context), /Unverified packaged file/);
+  await rm(path.join(native, "addon.node"));
+  await assert.rejects(verify(context), /Missing unpacked file/);
+});

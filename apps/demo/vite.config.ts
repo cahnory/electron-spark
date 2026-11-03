@@ -15,6 +15,8 @@ const RouteComponent = (): ReactNode => <div>Hello "%%tsrPath%%"</div>;
 `;
 
 export default defineElectronConfig({
+  // Workspace packages expose TypeScript source during development.
+  externalDeps: { exclude: ["@electron-spark/ipc", "@electron-spark/store"] },
   vite: {
     plugins: [
       electronAppIdentity({ projectDir: import.meta.dirname }),

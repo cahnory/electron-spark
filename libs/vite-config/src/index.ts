@@ -9,6 +9,8 @@ import {
   discoverRendererHtml,
   readRendererWindow,
 } from "@electron-spark/vite-plugin-electron-renderer";
+import { esmShim } from "@electron-spark/vite-plugin-esm-shim";
+import { externalDeps, type ExternalDepsOptions } from "@electron-spark/vite-plugin-external-deps";
 import {
   mergeConfig,
   type ConfigEnv,
@@ -33,6 +35,10 @@ export type ElectronConfigOptions = {
   renderer?: ConfigOverride<EnvironmentOptions> | undefined;
   /** Applied separately to every unique discovered preload entry. */
   preload?: ConfigOverride<EnvironmentOptions, PreloadContext> | undefined;
+  /** Main-process dependency policy. Set false to bundle dependencies. */
+  externalDeps?: false | Pick<ExternalDepsOptions, "include" | "exclude"> | undefined;
+  /** Supply CommonJS bindings in main-process ESM chunks. */
+  esmShim?: boolean | undefined;
   debug?: boolean | undefined;
   /** HTML entry path, relative to each matched view directory. */
   htmlEntry?: string | undefined;
@@ -207,6 +213,10 @@ const makeConfig = (options: ElectronConfigOptions, context: ConfigEnv): UserCon
         rendererManifestPath: options?.rendererManifestPath,
       }),
       ...Object.keys(preloadEnvironments).flatMap((preloadEnv) => electronPreload(preloadEnv)),
+      options.externalDeps === false
+        ? []
+        : externalDeps({ ...options.externalDeps, projectDir, environment: "electron" }),
+      options.esmShim === false ? [] : esmShim({ environment: "electron" }),
       electronMain(),
     ],
     root: path.relative(process.cwd(), srcDir),

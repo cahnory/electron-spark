@@ -5,7 +5,7 @@
   "directories": {
     "output": "release/${version}"
   },
-  "files": ["dist/**/*", "!**/*.map", "!**/*.ts", "!**/.env*", "!node_modules/**/*"],
+  "files": ["dist/**/*", "!**/*.map", "!**/*.{ts,tsx,cts,mts}", "!**/.env*"],
   "mac": {
     "icon": "src/resources/icons/macos/icon.icns",
     "artifactName": "${productName}_${version}.${ext}",
