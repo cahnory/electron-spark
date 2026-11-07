@@ -53,6 +53,29 @@ void test("missing required packages fail even when an unreachable nested copy e
   );
 });
 
+void test("type-only peers do not need to be packaged", async () => {
+  const directories = await discover({
+    "package.json": { dependencies: { "react-intl": "1" } },
+    "node_modules/react-intl/package.json": {
+      peerDependencies: { "@types/react": "1", react: "1" },
+    },
+    "node_modules/react/package.json": {},
+  });
+  assert.deepEqual([...directories].toSorted(), ["node_modules/react", "node_modules/react-intl"]);
+});
+
+void test("explicit dependencies remain required even when also declared as type peers", async () => {
+  await assert.rejects(
+    discover({
+      "package.json": {
+        dependencies: { "@types/react": "1" },
+        peerDependencies: { "@types/react": "1" },
+      },
+    }),
+    /Missing packaged dependency: @types\/react/,
+  );
+});
+
 void test("optional overrides may be absent and installed optional dependencies are followed", async () => {
   const directories = await discover({
     "package.json": {
