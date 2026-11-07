@@ -1,5 +1,11 @@
 # @electron-spark/electron-builder-verification
 
+## 0.3.1
+
+### Patch Changes
+
+- 0965374: Exclude `@types/*` peer dependencies from automatic runtime package requirements so type-only peers such as react-intl's `@types/react` do not fail packaging verification.
+
 ## 0.3.0
 
 ### Minor Changes
