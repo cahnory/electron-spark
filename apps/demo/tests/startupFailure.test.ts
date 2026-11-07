@@ -38,7 +38,7 @@ mock.module("electron", {
     },
   },
 });
-mock.module("../src/main/settings.ts", {
+mock.module("../src/main/features/settings/settings.ipc.ts", {
   namedExports: {
     createSettings: async () => {
       throw startupError;

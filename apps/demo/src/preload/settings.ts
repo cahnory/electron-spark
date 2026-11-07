@@ -1,7 +1,8 @@
 import { createIpcApiBridge, createIpcStateBridge } from "@electron-spark/ipc/renderer";
 import { ipcRenderer } from "electron";
 
-import type { Settings, SettingsActions } from "../main/settings.ts";
+import type { Settings } from "../main/features/settings/settings.dto.ts";
+import type { SettingsActions } from "../main/features/settings/settings.ipc.ts";
 
 export const settings = {
   state: createIpcStateBridge<Settings>(ipcRenderer, "settings"),
