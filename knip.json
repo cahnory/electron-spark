@@ -8,7 +8,6 @@
       "entry": [
         "src/main/index.ts",
         "src/view/index.tsx",
-        "src/view/preload.ts",
         "scripts/*.ts",
         "src/view/routes/**/*.{ts,tsx}"
       ],

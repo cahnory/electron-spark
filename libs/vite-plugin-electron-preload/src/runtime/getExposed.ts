@@ -1,14 +1,15 @@
-import { EXPOSE_KEY, EXPOSED_PRELOADS_KEY } from "./common.ts";
+import { EXPOSE_KEY } from "./common.ts";
 
 export const getExposed = (preloadPath: string) => {
-  const view = globalThis as Record<string, unknown>;
-  const exposedPreloads = view[EXPOSED_PRELOADS_KEY];
-
-  if (!exposedPreloads || !Object.hasOwn(exposedPreloads, preloadPath)) {
+  // This registry is installed by the generated preload before renderer execution.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  const preloads = (globalThis as Record<string, unknown>)[EXPOSE_KEY] as
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  if (!preloads || !Object.hasOwn(preloads, preloadPath)) {
     throw new Error(
-      `Preload "${preloadPath}" has not been loaded for this view. Configure this window's webPreferences.preload to load the corresponding preload.`,
+      `Preload "${preloadPath}" has not been loaded for this view. Rebuild the view's generated preload and reload the window.`,
     );
   }
-
-  return view[EXPOSE_KEY];
+  return preloads[preloadPath];
 };

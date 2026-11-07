@@ -18,6 +18,8 @@ export type ElectronRendererOptions = {
   rendererManifestPath?: string | undefined;
   /** Window configuration JSON path, relative to each renderer HTML directory. */
   windowConfigPath?: string | undefined;
+  /** Map HTML entries (relative to root) to generated aggregate preload environments. */
+  preloadEnvironments?: Record<string, string> | undefined;
   electronEnvironment: string;
   /** Optional override; otherwise discover the client environment containing HTML inputs. */
   clientEnvironment?: string | undefined;
@@ -86,7 +88,9 @@ export const electronRenderer = (options: ElectronRendererOptions): Plugin => {
     html: string,
   ): { window: Record<string, unknown>; icon: string | undefined } => {
     const defaults = htmlMetadata(fs.readFileSync(html, "utf8"));
-    const { window } = readRendererWindow(html, options.windowConfigPath);
+    const { window } = readRendererWindow(html, options.windowConfigPath, {
+      allowPreload: !options.preloadEnvironments,
+    });
     if (!server) validateProductionWindow(window, windowFile(html));
     let icon: string | undefined;
     if (typeof window.icon === "string") {
@@ -443,6 +447,16 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
 
           keys.add(key);
 
+          if (options.preloadEnvironments) {
+            const preload =
+              options.preloadEnvironments[normalizePath(path.relative(config.root, html))];
+            if (!preload || !config.environments[preload] || inputs(preload).length !== 1) {
+              throw new Error(
+                `Renderer '${key}' requires a preload environment with exactly one generated input.`,
+              );
+            }
+            return { key, html, preload, source: inputs(preload)[0] };
+          }
           const { preload: source } = readRendererWindow(html, options.windowConfigPath);
           const matches = source ? serverInputs.filter(({ entry }) => entry === source) : [];
           if (source && !matches.length) {
@@ -480,7 +494,11 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
       let timer: ReturnType<typeof setTimeout> | undefined;
       let closed = false;
       let sourceChanged = false;
-      const watchedSources = new Set(renderers.flatMap(({ source }) => (source ? [source] : [])));
+      const watchedSources = new Set(
+        options.preloadEnvironments
+          ? []
+          : renderers.flatMap(({ source }) => (source ? [source] : [])),
+      );
       const watchedWindows = new Set(renderers.map(({ html }) => windowFile(html)));
       const refresh = () => {
         if (closed || restarting) return;
@@ -493,6 +511,23 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
           for (const html of htmlFiles) {
             watchedWindows.add(windowFile(html));
             candidate.watcher.add([windowFile(html), path.dirname(windowFile(html))]);
+          }
+          if (options.preloadEnvironments) {
+            if (
+              htmlFiles.length !== renderers.length ||
+              htmlFiles.some((html) => !renderers.some((renderer) => renderer.html === html))
+            ) {
+              restarting = true;
+              void candidate
+                .restart()
+                .catch((error: unknown) => candidate.config.logger.error(String(error)))
+                .finally(() => {
+                  if (!closed) restarting = false;
+                });
+            } else if (candidate.resolvedUrls) {
+              generate();
+            }
+            return;
           }
           // Watch declared sources even when they do not exist yet. A subsequent creation
           // must recover without requiring another edit to window.json.

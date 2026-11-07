@@ -1,31 +1,15 @@
 import { contextBridge } from "electron";
 
-import { EXPOSE_KEY, EXPOSED_PRELOADS_KEY } from "./common.ts";
+import { EXPOSE_KEY } from "./common.ts";
 
-let isolatedBridge: Record<string, unknown> | undefined;
-const exposedPreloads: Record<string, true> = {};
-
-export const exposeToRenderer = <const T extends Record<string, unknown>>(
-  toExpose: T,
-  preloadPath: string,
+/** Expose the complete per-view registry once, after all preload modules initialize. */
+export const exposeToRenderer = <const T extends Record<string, Record<string, unknown>>>(
+  preloads: T,
 ): T => {
-  isolatedBridge ??= {};
-  Object.assign(isolatedBridge, toExpose);
-
-  /**
-   * Use `contextBridge` APIs to expose Electron APIs to
-   * renderer only if context isolation is enabled, otherwise
-   * just add to the DOM global.
-   */
   if (process.contextIsolated) {
-    contextBridge.exposeInMainWorld(EXPOSE_KEY, isolatedBridge);
-    exposedPreloads[preloadPath] = true;
-    contextBridge.exposeInMainWorld(EXPOSED_PRELOADS_KEY, exposedPreloads);
+    contextBridge.exposeInMainWorld(EXPOSE_KEY, preloads);
   } else {
-    (globalThis as Record<string, unknown>)[EXPOSE_KEY] ??= isolatedBridge;
-    exposedPreloads[preloadPath] = true;
-    (globalThis as Record<string, unknown>)[EXPOSED_PRELOADS_KEY] = exposedPreloads;
+    (globalThis as Record<string, unknown>)[EXPOSE_KEY] = preloads;
   }
-
-  return toExpose;
+  return preloads;
 };

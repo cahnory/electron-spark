@@ -2,9 +2,9 @@ import { subscribeIpcState } from "@electron-spark/ipc/renderer";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IntlProvider } from "react-intl";
 
+import { type Settings, settings } from "../../preload/settings";
 import { en } from "../messages/en";
 import { fr } from "../messages/fr";
-import { type Settings, settings } from "../preload";
 
 const messages = { en, fr } satisfies Record<Settings["locale"], Record<keyof typeof en, string>>;
 

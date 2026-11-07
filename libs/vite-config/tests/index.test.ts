@@ -18,15 +18,6 @@ async function fixture(t: TestContext) {
       const dir = path.join(projectDir, "src", name);
       await mkdir(dir, { recursive: true });
       await writeFile(path.join(dir, "index.html"), "<html></html>");
-      await writeFile(path.join(dir, "preload.ts"), "export {};");
-      await writeFile(
-        path.join(dir, "window.json"),
-        JSON.stringify({
-          webPreferences: {
-            preload: name === "views/shared" ? "../../view/preload.ts" : "./preload.ts",
-          },
-        }),
-      );
     }),
   );
   return projectDir;
@@ -55,7 +46,7 @@ await test("merges named overrides while preserving discovery and nested default
   const preloads = Object.entries(config.environments!).filter(([name]) =>
     name.startsWith("preload"),
   );
-  assert.equal(preloads.length, 2);
+  assert.equal(preloads.length, 3);
   for (const [, preload] of preloads) {
     assert.equal(preload.build!.minify, false);
     assert.equal(preload.build!.emptyOutDir, false);
@@ -81,10 +72,10 @@ await test("callbacks mutate, replace and delete defaults, with root customizati
     renderer(config) {
       config.input = ["replacement.html"];
     },
-    preload(config, { entry, command }) {
+    preload(config, { view, command }) {
       assert.equal(command, "build");
-      entries.push(entry);
-      config.build!.minify = entry.startsWith("view/");
+      entries.push(view);
+      config.build!.minify = view === "view";
       config.build!.rolldownOptions!.external = ["electron"];
     },
     vite(config) {
@@ -98,7 +89,7 @@ await test("callbacks mutate, replace and delete defaults, with root customizati
   assert.deepEqual(config.environments!.client.input, ["replacement.html"]);
   assert.deepEqual(
     entries.toSorted((a, b) => a.localeCompare(b)),
-    ["view/preload.ts", "views/settings/preload.ts"],
+    ["view", "views/settings", "views/shared"],
   );
   assert.equal(config.environments!.preload0.build!.minify, true);
   assert.equal(config.environments!.preload1.build!.minify, false);
@@ -248,8 +239,12 @@ await test("runtime dependencies are external in main and bundled in views and p
   );
   const source = `import { value } from 'runtime'; console.log(value);`;
   await writeFile(path.join(projectDir, "src/main/index.ts"), source);
-  await writeFile(path.join(projectDir, "src/view/preload.ts"), source);
-  await writeFile(path.join(projectDir, "src/view/index.ts"), source);
+  await mkdir(path.join(projectDir, "src/preload"));
+  await writeFile(path.join(projectDir, "src/preload/runtime.ts"), source);
+  await writeFile(
+    path.join(projectDir, "src/view/index.ts"),
+    `import "../preload/runtime"; ${source}`,
+  );
   await writeFile(
     path.join(projectDir, "src/view/index.html"),
     '<html><script type="module" src="./index.ts"></script></html>',
@@ -266,7 +261,7 @@ await test("runtime dependencies are external in main and bundled in views and p
   assert.match(main, /from ["']runtime["']/);
   assert.doesNotMatch(main, /runtime-dependency-marker/);
   await rm(path.join(projectDir, "node_modules"), { recursive: true });
-  const preload = await readFile(path.join(projectDir, "dist/preload/view/preload.cjs"), "utf8");
+  const preload = await readFile(path.join(projectDir, "dist/preload/view/index.cjs"), "utf8");
   const assetsDir = path.join(projectDir, "dist/assets");
   const renderer = (
     await Promise.all(

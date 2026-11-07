@@ -47,13 +47,21 @@ function readWindowOptions(file: string): Record<string, unknown> {
 export function readRendererWindow(
   html: string,
   windowConfigPath = "window.json",
-  { validatePreload = true }: { validatePreload?: boolean } = {},
+  {
+    validatePreload = true,
+    allowPreload = true,
+  }: { validatePreload?: boolean; allowPreload?: boolean } = {},
 ) {
   const file = path.resolve(path.dirname(html), windowConfigPath);
   const window = readWindowOptions(file);
   const source = isRecord(window.webPreferences) ? window.webPreferences.preload : undefined;
   let preload: string | undefined;
   if (source !== undefined) {
+    if (!allowPreload) {
+      throw new Error(
+        `Remove webPreferences.preload from ${file}; import a module matching preloadPatterns from the view instead.`,
+      );
+    }
     if (typeof source !== "string" || !source.trim()) {
       throw new Error(`webPreferences.preload must be a non-empty string: ${file}`);
     }
