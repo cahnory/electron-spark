@@ -12,6 +12,7 @@ const rendererData = {
       ...(VITE_DEV_SERVER_URL ? { url: new URL("view/index.html", VITE_DEV_SERVER_URL).href } : { path: resolve(dirname, "../../dist/view/index.html") }),
       "window": {
         "title": "Electron Spark",
+        "backgroundColor": "#f8fafb",
         "icon": resolve(dirname, "../public/favicon.ico"),
         "webPreferences": {
           "preload": resolve(dirname, "../../node_modules/.electron-spark/preload/view/index.html.ts")

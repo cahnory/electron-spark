@@ -1,46 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { validateProductionWindow } from "../src/window.ts";
-
-void test("production window validation rejects security exceptions", () => {
-  assert.doesNotThrow(() => validateProductionWindow({}, "window.json"));
-  assert.doesNotThrow(() =>
-    validateProductionWindow(
-      {
-        webPreferences: {
-          preload: "bridge.cjs",
-          sandbox: true,
-          contextIsolation: true,
-          nodeIntegration: false,
-        },
-      },
-      "window.json",
-    ),
-  );
-  for (const [key, value] of Object.entries({
-    contextIsolation: false,
-    sandbox: false,
-    webSecurity: false,
-    nodeIntegration: true,
-    nodeIntegrationInWorker: true,
-    nodeIntegrationInSubFrames: true,
-    webviewTag: true,
-    allowRunningInsecureContent: true,
-    experimentalFeatures: true,
-    enableBlinkFeatures: "ExperimentalFeature",
-  })) {
-    assert.throws(
-      () => validateProductionWindow({ webPreferences: { [key]: value } }, "window.json"),
-      /Production windows/,
-    );
-  }
-  assert.throws(
-    () => validateProductionWindow({ webPreferences: { sandbox: "true" } }, "window.json"),
-    /Production windows/,
-  );
-});
-
 void test("production CSP supplies a default and rejects executable remote or inline scripts", async () => {
   const { productionCsp } = await import("../src/csp.ts");
   const content = productionCsp("<html><head></head></html>")[0].attrs?.content;

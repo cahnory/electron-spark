@@ -46,14 +46,30 @@ public directory first, then Vite's root. Build icons are emitted as assets and
 remain valid when the output is relocated.
 
 An optional `window.json` beside each HTML file supplies JSON-compatible
-BrowserWindow options. These override the HTML defaults, including `title` and
+BrowserWindow presentation options. These override the HTML defaults, including `title` and
 `icon`. A JSON `icon` path resolves relative to that HTML directory. Other options
-are passed through unchanged.
+are passed through unchanged. `webPreferences` is rejected: configure execution
+settings such as sandboxing, isolation, sessions, and process arguments in main.
 
 With `defineElectronConfig`, preload modules are selected by `preloadPatterns` and
 renderer imports. Each view receives one generated aggregate preload. Do not declare
-`webPreferences.preload` in `window.json`; the generated manifest supplies the
-emitted path while preserving the other web preferences.
+`webPreferences` in `window.json`; the generated manifest supplies only the
+emitted preload path.
+
+Apply application execution settings when creating the window in main:
+
+```ts
+const options = entry.window;
+const win = new BrowserWindow({
+  ...options,
+  webPreferences: {
+    ...options.webPreferences,
+    sandbox: true,
+    contextIsolation: true,
+    nodeIntegration: false,
+  },
+});
+```
 
 For custom Vite configurations, `preloadEnvironments` maps root-relative HTML
 entries to the environments that build their aggregate preloads:
@@ -65,15 +81,9 @@ electronRenderer({
 });
 ```
 
-Each mapped environment must have one input and emit one entry. Build renderer
+Entries without a mapping have no preload. Each mapped environment must have one input and emit one entry. Build renderer
 graphs first, followed by their aggregates, then main. The plugin handles this
 ordering through `buildApp`; pair it with `electronPreloadViews` for discovery.
-
-The low-level plugin retains explicit source declarations when
-`preloadEnvironments` is omitted: `webPreferences.preload` resolves relative to
-the JSON file and must match a server environment's input. The exported
-`readRendererWindow` helper supports this manual configuration. This is separate
-from the import-based configuration supplied by `defineElectronConfig`.
 
 For editor completion and validation, point `$schema` at the plugin's
 `window.schema.json` through a relative path to its installed package. Adjust
@@ -85,8 +95,7 @@ is not passed to `BrowserWindow`.
   "$schema": "../../../node_modules/@electron-spark/vite-plugin-electron-renderer/window.schema.json",
   "title": "Custom settings title",
   "width": 900,
-  "autoHideMenuBar": true,
-  "webPreferences": { "sandbox": true }
+  "autoHideMenuBar": true
 }
 ```
 

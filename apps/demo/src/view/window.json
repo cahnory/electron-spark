@@ -1,0 +1,4 @@
+{
+  "$schema": "../../node_modules/@electron-spark/vite-config/window.schema.json",
+  "backgroundColor": "#f8fafb"
+}

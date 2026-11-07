@@ -7,7 +7,7 @@ import { normalizePath, type Plugin, type ResolvedConfig, type ViteDevServer } f
 
 import { productionCsp } from "./csp.ts";
 import { discoverRendererHtml } from "./discover.ts";
-import { isRecord, readRendererWindow, validateProductionWindow } from "./window.ts";
+import { readRendererWindow } from "./window.ts";
 
 export type ElectronRendererOptions = {
   /** View directory patterns relative to Vite's root; re-evaluate config when matches change. */
@@ -88,10 +88,7 @@ export const electronRenderer = (options: ElectronRendererOptions): Plugin => {
     html: string,
   ): { window: Record<string, unknown>; icon: string | undefined } => {
     const defaults = htmlMetadata(fs.readFileSync(html, "utf8"));
-    const { window } = readRendererWindow(html, options.windowConfigPath, {
-      allowPreload: !options.preloadEnvironments,
-    });
-    if (!server) validateProductionWindow(window, windowFile(html));
+    const { window } = readRendererWindow(html, options.windowConfigPath);
     let icon: string | undefined;
     if (typeof window.icon === "string") {
       icon = path.resolve(path.dirname(html), window.icon);
@@ -167,7 +164,6 @@ export const electronRenderer = (options: ElectronRendererOptions): Plugin => {
                 ...(renderer.preload
                   ? {
                       webPreferences: {
-                        ...(isRecord(window.webPreferences) ? window.webPreferences : {}),
                         preload: runtimePath(
                           renderer.source!,
                           path.resolve(
@@ -427,9 +423,6 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
         htmlInputs.push(path.resolve(config.root, "index.html"));
       }
 
-      const serverInputs = Object.entries(config.environments)
-        .filter(([name, environment]) => name !== electron && environment.consumer === "server")
-        .flatMap(([name]) => inputs(name).map((entry) => ({ name, entry })));
       const keys = new Set<string>();
 
       renderers = htmlInputs
@@ -450,32 +443,15 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
           if (options.preloadEnvironments) {
             const preload =
               options.preloadEnvironments[normalizePath(path.relative(config.root, html))];
-            if (!preload || !config.environments[preload] || inputs(preload).length !== 1) {
+            if (preload && (!config.environments[preload] || inputs(preload).length !== 1)) {
               throw new Error(
                 `Renderer '${key}' requires a preload environment with exactly one generated input.`,
               );
             }
-            return { key, html, preload, source: inputs(preload)[0] };
+            return preload ? { key, html, preload, source: inputs(preload)[0] } : { key, html };
           }
-          const { preload: source } = readRendererWindow(html, options.windowConfigPath);
-          const matches = source ? serverInputs.filter(({ entry }) => entry === source) : [];
-          if (source && !matches.length) {
-            throw new Error(
-              `No preload environment for '${source}' declared by ${windowFile(html)}.`,
-            );
-          }
-          if (matches.length > 1) {
-            throw new Error(`Ambiguous preload entries for renderer '${key}'.`);
-          }
-
-          const preload = matches[0]?.name;
-          if (preload && inputs(preload).length !== 1) {
-            throw new Error(
-              `Renderer preload environment '${preload}' must have exactly one input.`,
-            );
-          }
-
-          return preload && source ? { key, html, preload, source } : { key, html };
+          readRendererWindow(html, options.windowConfigPath);
+          return { key, html };
         });
 
       preloads = [...new Set(renderers.flatMap(({ preload }) => (preload ? [preload] : [])))];
@@ -493,16 +469,9 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
 
       let timer: ReturnType<typeof setTimeout> | undefined;
       let closed = false;
-      let sourceChanged = false;
-      const watchedSources = new Set(
-        options.preloadEnvironments
-          ? []
-          : renderers.flatMap(({ source }) => (source ? [source] : [])),
-      );
       const watchedWindows = new Set(renderers.map(({ html }) => windowFile(html)));
       const refresh = () => {
         if (closed || restarting) return;
-        let missingSources: string[] = [];
         try {
           const htmlFiles =
             options.viewPatterns === undefined
@@ -512,55 +481,15 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
             watchedWindows.add(windowFile(html));
             candidate.watcher.add([windowFile(html), path.dirname(windowFile(html))]);
           }
-          if (options.preloadEnvironments) {
-            if (
-              htmlFiles.length !== renderers.length ||
-              htmlFiles.some((html) => !renderers.some((renderer) => renderer.html === html))
-            ) {
-              restarting = true;
-              void candidate
-                .restart()
-                .catch((error: unknown) => candidate.config.logger.error(String(error)))
-                .finally(() => {
-                  if (!closed) restarting = false;
-                });
-            } else if (candidate.resolvedUrls) {
-              generate();
-            }
-            return;
-          }
-          // Watch declared sources even when they do not exist yet. A subsequent creation
-          // must recover without requiring another edit to window.json.
-          const declarations = htmlFiles.map((html) => ({
-            html,
-            source: readRendererWindow(html, options.windowConfigPath, { validatePreload: false })
-              .preload,
-          }));
-          for (const { source } of declarations) {
-            if (source) {
-              watchedSources.add(source);
-              candidate.watcher.add([source, path.dirname(source)]);
-            }
-          }
-          missingSources = declarations.flatMap(({ source }) =>
-            source && !fs.statSync(source, { throwIfNoEntry: false })?.isFile() ? [source] : [],
-          );
-          for (const { html } of declarations) readRendererWindow(html, options.windowConfigPath);
-          const changed =
-            sourceChanged ||
-            declarations.length !== renderers.length ||
-            declarations.some(
-              ({ html, source }) =>
-                !renderers.some((renderer) => renderer.html === html && renderer.source === source),
-            );
-          if (changed) {
+          if (
+            htmlFiles.length !== renderers.length ||
+            htmlFiles.some((html) => !renderers.some((renderer) => renderer.html === html))
+          ) {
             restarting = true;
             void candidate
               .restart()
               .catch((error: unknown) => candidate.config.logger.error(String(error)))
               .finally(() => {
-                // Vite can report a config failure without rejecting restart().
-                // Keep the old watcher usable so a corrected file can retry.
                 if (!closed) restarting = false;
               });
           } else if (candidate.resolvedUrls) {
@@ -568,46 +497,25 @@ export default rendererData as RendererData<"serve"> | RendererData<"build">;
           }
         } catch (error) {
           candidate.config.logger.error(String(error));
-          if (missingSources.length) {
-            // A source can appear while the asynchronous watcher.add() is still
-            // initializing, so recovery cannot depend on receiving its add event.
-            const retry = () => {
-              if (closed || restarting) return;
-              if (
-                missingSources.every((source) =>
-                  fs.statSync(source, { throwIfNoEntry: false })?.isFile(),
-                )
-              ) {
-                refresh();
-              } else {
-                timer = setTimeout(retry, 75);
-              }
-            };
-            clearTimeout(timer);
-            timer = setTimeout(retry, 75);
-          }
         }
       };
       const schedule = (event: string, file: string) => {
         file = path.resolve(file);
         const known = watchedWindows.has(file) || renderers.some(({ html }) => file === html);
-        const source = watchedSources.has(file) && (event === "add" || event === "unlink");
         const structure =
           options.viewPatterns !== undefined &&
           (event === "add" || event === "unlink") &&
           path.basename(file) === path.basename(options.htmlEntry ?? "index.html");
-        if (closed || restarting || (!known && !source && !structure)) return;
-        sourceChanged ||= source;
+        if (closed || restarting || (!known && !structure)) return;
         clearTimeout(timer);
         timer = setTimeout(refresh, 75);
       };
       candidate.watcher.add([
         ...(options.viewPatterns === undefined ? [] : [config.root]),
-        ...renderers.flatMap(({ html, source }) => [
+        ...renderers.flatMap(({ html }) => [
           html,
           windowFile(html),
           path.dirname(windowFile(html)),
-          ...(source ? [source, path.dirname(source)] : []),
         ]),
       ]);
       const added = (file: string) => schedule("add", file);

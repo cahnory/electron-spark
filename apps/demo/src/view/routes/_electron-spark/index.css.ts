@@ -1,6 +1,27 @@
-import { globalStyle, style, createTheme } from "@vanilla-extract/css";
+import { globalStyle, style, createGlobalTheme, createThemeContract } from "@vanilla-extract/css";
 
-const [theme, vars] = createTheme({
+const vars = createThemeContract({
+  color: {
+    background: null,
+    panel: null,
+    text: null,
+    secondary: null,
+    border: null,
+    accent: null,
+    accentSoft: null,
+    glow: null,
+  },
+});
+
+export const page = style({
+  background: vars.color.background,
+  color: vars.color.text,
+  fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+  minHeight: "100svh",
+  WebkitFontSmoothing: "antialiased",
+});
+
+createGlobalTheme(`:where(:root:has(${page}))`, vars, {
   color: {
     background: "light-dark(#f8fafb, #111719)",
     panel: "light-dark(#ffffff, #192225)",
@@ -9,30 +30,17 @@ const [theme, vars] = createTheme({
     border: "light-dark(#dde7e9, #2c3b40)",
     accent: "light-dark(#007e88, #71dde2)",
     accentSoft: "light-dark(#eaf4f5, #22383c)",
-    orbit: "light-dark(#78bac3, #44828b)",
     glow: "light-dark(#daf2f3, #203f43)",
-    halo: "light-dark(#dff1f2, #20383b)",
   },
 });
-
-export const page = style([
-  theme,
-  {
-    colorScheme: "light dark",
-    minHeight: "100svh",
-    background: vars.color.background,
-    color: vars.color.text,
-    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
-    WebkitFontSmoothing: "antialiased",
-  },
-]);
 
 globalStyle(`:where(${page}, ${page} *)`, {
   boxSizing: "border-box",
 });
 
 globalStyle(`:where(html:has(${page}))`, {
-  background: "#f8fafb",
+  background: vars.color.background,
+  colorScheme: "light dark",
   display: "flex",
   flexDirection: "column",
   fontSize: [`${(10 / 16) * 100}%`, `${10 / 16}em`],

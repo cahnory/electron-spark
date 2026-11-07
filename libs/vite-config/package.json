@@ -13,7 +13,8 @@
     "directory": "libs/vite-config"
   },
   "files": [
-    "dist"
+    "dist",
+    "window.schema.json"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -21,7 +22,8 @@
   "types": "./dist/index.d.cts",
   "exports": {
     ".": "./src/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./window.schema.json": "./window.schema.json"
   },
   "publishConfig": {
     "exports": {
@@ -29,7 +31,8 @@
         "import": "./dist/index.js",
         "require": "./dist/index.cjs"
       },
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./window.schema.json": "./window.schema.json"
     },
     "access": "public"
   },

@@ -382,7 +382,7 @@ void test("custom patterns select JavaScript preload modules and window declarat
     path.join(projectDir, "src/views/second/window.json"),
     JSON.stringify({ webPreferences: { preload: "missing.ts" } }),
   );
-  await assert.rejects(builder.buildApp(), /Remove webPreferences.preload.*preloadPatterns/);
+  await assert.rejects(builder.buildApp(), /Remove webPreferences.*preloadPatterns/);
 });
 
 void test("zero views need no renderer discovery build", async (t) => {

@@ -1,12 +1,7 @@
 # Project files
-.env
-.env.*
-!.env.example
 /apps/*/dist
 /apps/*/release
 /libs/*/dist
-
-/apps/desktop/.user_data
 
 # Tooling files
 .pnpm-store

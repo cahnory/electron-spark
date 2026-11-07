@@ -58,6 +58,27 @@ caller's responsibility.
 
 Exported types: `ElectronConfigOptions`, `ConfigOverride`, and `PreloadContext`.
 
+## Window options
+
+An optional `window.json` beside each view's HTML entry supplies presentation
+options such as title, size, and menu visibility. Configure `webPreferences` in
+the main process; the generated renderer manifest supplies the preload path.
+
+For editor completion and validation, reference the schema included in this
+package. For `src/view/window.json`:
+
+```json
+{
+  "$schema": "../../node_modules/@electron-spark/vite-config/window.schema.json",
+  "width": 900,
+  "autoHideMenuBar": true
+}
+```
+
+Adjust the relative path for other view locations. `$schema` is editor metadata
+and is omitted from the generated window options. No direct dependency on the
+renderer plugin is needed. The schema is copied from that plugin during builds.
+
 ## Import-based preloads
 
 Put bridge modules in `src/preload` and import them from your views:
@@ -86,7 +107,7 @@ are collected too. Their preloads initialize before the document runs, even when
 the renderer loads the corresponding route later. Runtime-computed paths that
 Vite cannot resolve are not supported for preload discovery.
 
-Remove `webPreferences.preload` from `window.json`: the generated renderer manifest
+Configure `webPreferences` in main rather than `window.json`: the generated renderer manifest
 sets it to `dist/preload/<view>/index.cjs`. Views with no matching imports receive
 an empty aggregate. Generated source entries live under
 `node_modules/.electron-spark/preload` and are not application source.
