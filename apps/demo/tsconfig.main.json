@@ -1,5 +1,5 @@
 {
-  "display": "Electron",
+  "display": "Main",
   "extends": "../../tsconfig.node.json",
   "include": ["src/main/**/*"],
   "compilerOptions": {

@@ -18,7 +18,7 @@ plus a `window` object suitable for `new BrowserWindow(entry.window)`:
     title: "Settings",
     icon: "/app/dist/assets/favicon-abc.ico",
     autoHideMenuBar: true,
-    webPreferences: { preload: "/app/dist/preload/view/preload.cjs" }
+    webPreferences: { preload: "/app/dist/preload/view/index.cjs" }
   }
 }
 ```
@@ -46,23 +46,44 @@ public directory first, then Vite's root. Build icons are emitted as assets and
 remain valid when the output is relocated.
 
 An optional `window.json` beside each HTML file supplies JSON-compatible
-BrowserWindow options. These override the HTML defaults, including `title` and
+BrowserWindow presentation options. These override the HTML defaults, including `title` and
 `icon`. A JSON `icon` path resolves relative to that HTML directory. Other options
-are passed through unchanged.
+are passed through unchanged. `webPreferences` is rejected: configure execution
+settings such as sandboxing, isolation, sessions, and process arguments in main.
 
-`webPreferences.preload` declares the source file to compile (for example
-`"./bridge.ts"`), relative to the JSON file's directory. The JSON filename is
-configurable through `windowConfigPath` in both the plugin and desktop config.
-Omitting this property means the window has no preload, even if a source file
-exists beside its HTML. Invalid or missing declared sources produce an error.
+With `defineElectronConfig`, preload modules are selected by `preloadPatterns` and
+renderer imports. Each view receives one generated aggregate preload. Do not declare
+`webPreferences` in `window.json`; the generated manifest supplies only the
+emitted preload path.
 
-The exported `readRendererWindow(html, windowConfigPath)` helper returns the
-resolved JSON `file`, its `window` options, and the absolute optional `preload`
-source. The desktop config uses this helper to create one build environment per
-unique source; windows can share a source or reference one in another directory.
-The plugin matches that exact source to a server environment with one input,
-then replaces the source path with the emitted preload path in the generated
-module, preserving the remaining web preferences.
+Apply application execution settings when creating the window in main:
+
+```ts
+const options = entry.window;
+const win = new BrowserWindow({
+  ...options,
+  webPreferences: {
+    ...options.webPreferences,
+    sandbox: true,
+    contextIsolation: true,
+    nodeIntegration: false,
+  },
+});
+```
+
+For custom Vite configurations, `preloadEnvironments` maps root-relative HTML
+entries to the environments that build their aggregate preloads:
+
+```ts
+electronRenderer({
+  electronEnvironment: "electron",
+  preloadEnvironments: { "views/settings/index.html": "settingsPreload" },
+});
+```
+
+Entries without a mapping have no preload. Each mapped environment must have one input and emit one entry. Build renderer
+graphs first, followed by their aggregates, then main. The plugin handles this
+ordering through `buildApp`; pair it with `electronPreloadViews` for discovery.
 
 For editor completion and validation, point `$schema` at the plugin's
 `window.schema.json` through a relative path to its installed package. Adjust
@@ -74,15 +95,13 @@ is not passed to `BrowserWindow`.
   "$schema": "../../../node_modules/@electron-spark/vite-plugin-electron-renderer/window.schema.json",
   "title": "Custom settings title",
   "width": 900,
-  "autoHideMenuBar": true,
-  "webPreferences": { "sandbox": true, "preload": "./preload.ts" }
+  "autoHideMenuBar": true
 }
 ```
 
 HTML and ordinary window configuration changes regenerate the module during
-development. Adding, removing, or changing a preload declaration automatically
-restarts Vite internally so the configuration can recreate the preload environments.
-There is no need to stop and rerun the terminal command.
+development. Changes to imported preload modules are handled by the preload
+plugin, which rebuilds the aggregate and reloads the document.
 
 For dynamic view discovery, use `discoverRendererHtml(root, viewPatterns, htmlEntry)`
 inside the Vite config function to populate the client HTML inputs, and pass the
@@ -95,8 +114,5 @@ Zero matching views are supported during development. Events are debounced to
 group directory operations, and files outside the patterns do not cause a restart.
 
 Adding or removing `window.json` (including a custom nested `windowConfigPath`)
-is also watched. Creating an undeclared preload file does not attach it to a view:
-declare it in `webPreferences.preload`. Removing a still-declared preload reports
-an error and keeps the last valid manifest; restoring the file or correcting the
-declaration is picked up automatically. The discovery watcher also tracks missing
-declared sources, so the declaration and source can be created in either order.
+is also watched. A preload file becomes part of a view's aggregate only when it
+matches the configured preload patterns and is imported by that view's graph.

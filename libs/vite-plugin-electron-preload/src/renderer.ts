@@ -7,10 +7,12 @@ import { preloadEntries, runtimeHelper } from "./shared.ts";
 const getHelper = runtimeHelper("getExposed");
 
 /** Replace renderer imports of preload entries with getter-backed exports. */
-export function electronPreloadRenderer(environmentName = "preload"): Plugin {
+export function electronPreloadRenderer(
+  environmentName: string | { preloadPatterns: string | readonly string[] } = "preload",
+): Plugin {
   const entries = preloadEntries(environmentName);
   return {
-    name: `@electron-spark/vite-plugin-electron-preload:renderer:${environmentName}`,
+    name: `@electron-spark/vite-plugin-electron-preload:renderer:${typeof environmentName === "string" ? environmentName : "patterns"}`,
     enforce: "pre",
     configResolved: (config) => entries.configure(config),
     async load(id) {

@@ -49,7 +49,7 @@ mock.module("electron", {
   namedExports: { app, session: { defaultSession: {} }, BrowserWindow, shell: {}, dialog: {} },
 });
 const provided: BrowserWindow[] = [];
-mock.module("../src/main/settings.ts", {
+mock.module("../src/main/features/settings/settings.ipc.ts", {
   namedExports: {
     createSettings: async () => ({ provideTo: (window: BrowserWindow) => provided.push(window) }),
   },

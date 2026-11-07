@@ -7,7 +7,7 @@ import { mock, test } from "node:test";
 
 import type { BrowserWindow } from "electron";
 
-import type { Settings } from "../src/main/settings.ts";
+import type { Settings } from "../src/main/features/settings/settings.dto.ts";
 
 type Reply = { ok: boolean; data: { data: Settings } };
 const handlers = new Map<string, (event: unknown, payload: unknown) => Promise<Reply>>();
@@ -23,7 +23,7 @@ mock.module("electron", {
     },
   },
 });
-const { createSettings } = await import("../src/main/settings.ts");
+const { createSettings } = await import("../src/main/features/settings/settings.ipc.ts");
 
 void test("settings IPC validates locale, persists changes, restricts callers, and reloads", async (context) => {
   userData = await mkdtemp(join(tmpdir(), "demo-settings-"));

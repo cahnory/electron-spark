@@ -3,16 +3,16 @@ import { builtinModules } from "node:module";
 import path from "node:path";
 
 import { electronMain } from "@electron-spark/vite-plugin-electron-main";
-import { electronPreload } from "@electron-spark/vite-plugin-electron-preload";
+import { electronPreloadViews } from "@electron-spark/vite-plugin-electron-preload";
 import {
   electronRenderer,
   discoverRendererHtml,
-  readRendererWindow,
 } from "@electron-spark/vite-plugin-electron-renderer";
 import { esmShim } from "@electron-spark/vite-plugin-esm-shim";
 import { externalDeps, type ExternalDepsOptions } from "@electron-spark/vite-plugin-external-deps";
 import {
   mergeConfig,
+  normalizePath,
   type ConfigEnv,
   type EnvironmentOptions,
   type Plugin,
@@ -24,8 +24,8 @@ import {
 export type ConfigOverride<T, Context = ConfigEnv> = T | ((config: T, context: Context) => void);
 
 export type PreloadContext = ConfigEnv & {
-  /** Preload entry relative to srcDir. */
-  entry: string;
+  /** View directory relative to srcDir. */
+  view: string;
 };
 
 export type ElectronConfigOptions = {
@@ -33,8 +33,10 @@ export type ElectronConfigOptions = {
   vite?: ConfigOverride<UserConfig> | undefined;
   main?: ConfigOverride<EnvironmentOptions> | undefined;
   renderer?: ConfigOverride<EnvironmentOptions> | undefined;
-  /** Applied separately to every unique discovered preload entry. */
+  /** Applied separately to every view's generated preload bundle. */
   preload?: ConfigOverride<EnvironmentOptions, PreloadContext> | undefined;
+  /** Preload module paths or glob patterns, relative to srcDir. */
+  preloadPatterns?: string | readonly string[] | undefined;
   /** Main-process dependency policy. Set false to bundle dependencies. */
   externalDeps?: false | Pick<ExternalDepsOptions, "include" | "exclude"> | undefined;
   /** Supply CommonJS bindings in main-process ESM chunks. */
@@ -61,6 +63,7 @@ const DEFAULT_CONFIG_OPTIONS = {
   htmlEntry: "index.html",
   mainEntry: "main/index.ts",
   viewPatterns: ["view", "views/*"],
+  preloadPatterns: ["preload/**/*.ts"],
   srcDir: "src",
   outDir: "dist",
 } as const satisfies ElectronConfigOptions;
@@ -111,59 +114,38 @@ const makeConfig = (options: ElectronConfigOptions, context: ConfigEnv): UserCon
     path.resolve(srcDir, options?.mainEntry ?? DEFAULT_CONFIG_OPTIONS.mainEntry),
   );
 
-  const { htmlInput, preloadInput } = discoverRendererHtml(srcDir, viewPatterns, htmlEntry).reduce<{
-    htmlInput: string[];
-    preloadInput: string[];
-  }>(
-    (res, htmlFile) => {
-      res.htmlInput.push(path.relative(srcDir, htmlFile));
-
-      const { preload: preloadFile } = readRendererWindow(htmlFile, options?.windowConfigPath);
-      if (preloadFile) {
-        res.preloadInput.push(path.relative(srcDir, preloadFile));
-      }
-      return res;
-    },
-    { htmlInput: [], preloadInput: [] },
+  const htmlInput = discoverRendererHtml(srcDir, viewPatterns, htmlEntry).map((file) =>
+    normalizePath(path.relative(srcDir, file)),
   );
-
-  // Separate environments keep each BrowserWindow preload self-contained.
-  // Renderer imports read the exports exposed by the matching preload.
+  const preloadViews = htmlInput.map((html, index) => ({
+    html,
+    environment: `preload${index}`,
+    entry: path.join(projectDir, "node_modules/.electron-spark/preload", `${html}.ts`),
+  }));
   const preloadEnvironments = Object.fromEntries(
-    [...new Set(preloadInput)].map((preload, index) => {
-      const entry = preload.startsWith(`..${path.sep}`)
-        ? `external/preload${index}${path.extname(preload)}`
-        : preload;
-      const output = path.join("preload", entry.slice(0, -path.extname(entry).length));
-      return [
-        `preload${index}`,
-        customize<PreloadContext>(
-          {
-            consumer: "server",
-            input: preload,
-            build: {
-              ssr: true,
-              // The client build cleans dist; preload outputs may share a directory.
-              emptyOutDir: false,
-              copyPublicDir: false,
-              outDir: path.relative(srcDir, path.resolve(outDir, path.dirname(output))),
-              rolldownOptions: {
-                external: ["electron", /^electron\//, ...builtinModules, /^node:/],
-                output: {
-                  format: "cjs",
-                  entryFileNames: `${path.basename(output)}.cjs`,
-                  codeSplitting: false,
-                },
-              },
+    preloadViews.map(({ html, entry, environment }) => [
+      environment,
+      customize<PreloadContext>(
+        {
+          consumer: "server",
+          input: entry,
+          build: {
+            ssr: true,
+            emptyOutDir: false,
+            copyPublicDir: false,
+            outDir: path.relative(srcDir, path.join(outDir, "preload", path.dirname(html))),
+            rolldownOptions: {
+              external: ["electron", /^electron\//, ...builtinModules, /^node:/],
+              output: { format: "cjs", entryFileNames: "index.cjs", codeSplitting: false },
             },
-            resolve: { noExternal: true },
           },
-          options.preload,
-          { ...context, entry: preload },
-          true,
-        ),
-      ];
-    }),
+          resolve: { noExternal: true },
+        },
+        options.preload,
+        { ...context, view: path.dirname(html) },
+        true,
+      ),
+    ]),
   );
 
   let config: UserConfig = {
@@ -211,8 +193,14 @@ const makeConfig = (options: ElectronConfigOptions, context: ConfigEnv): UserCon
         htmlEntry,
         windowConfigPath: options?.windowConfigPath,
         rendererManifestPath: options?.rendererManifestPath,
+        preloadEnvironments: Object.fromEntries(
+          preloadViews.map(({ html, environment }) => [html, environment]),
+        ),
       }),
-      ...Object.keys(preloadEnvironments).flatMap((preloadEnv) => electronPreload(preloadEnv)),
+      ...electronPreloadViews({
+        views: preloadViews,
+        preloadPatterns: options.preloadPatterns ?? DEFAULT_CONFIG_OPTIONS.preloadPatterns,
+      }),
       options.externalDeps === false
         ? []
         : externalDeps({ ...options.externalDeps, projectDir, environment: "electron" }),

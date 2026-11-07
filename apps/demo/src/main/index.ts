@@ -8,8 +8,8 @@ import { app, dialog, session } from "electron";
 import { IS_MAC_OS, MODE, RESOURCES_PATH } from "./constants.ts";
 import { configureSessionPermissions } from "./core/security.ts";
 import { createRenderer } from "./core/windowManager.ts";
+import { createSettings } from "./features/settings/settings.ipc.ts";
 import data from "./renderers.generated.ts";
-import { createSettings } from "./settings.ts";
 
 const renderers = createRenderer(data);
 

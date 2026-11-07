@@ -8,7 +8,7 @@ import vm from "node:vm";
 import type { PluginOption, Plugin, Rolldown } from "vite";
 import { createBuilder, createServer } from "vite";
 
-import { EXPOSED_PRELOADS_KEY } from "../src/runtime/common.ts";
+import { EXPOSE_KEY } from "../src/runtime/common.ts";
 
 const {
   electronPreload,
@@ -185,10 +185,13 @@ void test("each preload environment exposes its own entry under a distinct key",
     assert.ok(!Array.isArray(second) && "output" in second);
     const renderer = await builder.build(builder.environments.client);
     assert.ok(!Array.isArray(renderer) && "output" in renderer);
-    const view: { result?: string; [EXPOSED_PRELOADS_KEY]?: Record<string, boolean> } & Record<
-      string,
-      unknown
-    > = { process: { contextIsolated: false }, require: () => ({ contextBridge: {} }) };
+    const view: {
+      result?: string;
+      [EXPOSE_KEY]?: Record<string, Record<string, unknown>>;
+    } & Record<string, unknown> = {
+      process: { contextIsolated: false },
+      require: () => ({ contextBridge: {} }),
+    };
     vm.runInNewContext(
       second.output.find(
         (item): item is Rolldown.OutputChunk => item.type === "chunk" && item.isEntry,
@@ -202,9 +205,9 @@ void test("each preload environment exposes its own entry under a distinct key",
       view,
     );
     assert.equal(view.result, "second");
-    assert.ok(view[EXPOSED_PRELOADS_KEY]);
-    assert.equal(view[EXPOSED_PRELOADS_KEY]["second.ts"], true);
-    assert.equal(view[EXPOSED_PRELOADS_KEY]["preload.ts"], undefined);
+    assert.ok(view[EXPOSE_KEY]);
+    assert.equal(view[EXPOSE_KEY]["second.ts"].second, "second");
+    assert.equal(view[EXPOSE_KEY]["preload.ts"], undefined);
   });
 });
 

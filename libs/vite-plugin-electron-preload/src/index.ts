@@ -24,3 +24,9 @@ export function electronPreload(environmentName = "preload"): Plugin[] {
     }),
   ];
 }
+
+export {
+  electronPreloadViews,
+  type PreloadView,
+  type ElectronPreloadViewsOptions,
+} from "./views.ts";

@@ -41,7 +41,7 @@ export function electronPreloadExpose(environmentName = "preload"): Plugin {
         const source = id.slice(wrapperPrefix.length);
         return `import * as exposed from ${JSON.stringify(source)};
 import { exposeToRenderer } from ${JSON.stringify(exposeHelper)};
-exposeToRenderer(exposed, ${JSON.stringify(entries.key(source))});`;
+exposeToRenderer({ [${JSON.stringify(entries.key(source))}]: exposed });`;
       }
       return null;
     },

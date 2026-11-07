@@ -11,8 +11,8 @@ import {
 import { useState, type ReactNode } from "react";
 import { FormattedMessage, useIntl } from "react-intl";
 
+import { settings } from "../../../preload/settings";
 import visual from "../../assets/visual.png?url";
-import { settings } from "../../preload";
 
 import * as styles from "./index.css";
 

@@ -25,7 +25,12 @@ export async function packagedDependencies(
     visited.add(directory);
     const manifest = await readManifest(directory ? `${directory}/package.json` : "package.json");
     const dependencies = {
-      ...manifest.peerDependencies,
+      // DefinitelyTyped peers are compile-time declarations, not runtime requirements.
+      ...Object.fromEntries(
+        Object.entries(manifest.peerDependencies ?? {}).filter(
+          ([name]) => !name.startsWith("@types/"),
+        ),
+      ),
       ...manifest.dependencies,
       ...manifest.optionalDependencies,
     };
